@@ -195,15 +195,41 @@
   }
 
   // GPX 1.1 lisible par OsmAnd (trace + points d'intérêt)
-  function buildGpx(name, coords, wpts) {
+  // Codes de virage compris par OsmAnd (format des itinéraires OsmAnd/BRouter)
+  var OSMAND_TURN = { 1: 'C', 2: 'TL', 3: 'TSLL', 4: 'TSHL', 5: 'TR', 6: 'TSLR', 7: 'TSHR', 8: 'KL', 9: 'KR',
+    10: 'TU', 11: 'TRU', 15: 'TU', 17: 'KL', 18: 'KR' };
+  var OSMAND_DESC = { C: 'continuer', TL: 'à gauche', TSLL: 'légèrement à gauche', TSHL: 'franchement à gauche', TR: 'à droite',
+    TSLR: 'légèrement à droite', TSHR: 'franchement à droite', KL: 'serrer à gauche', KR: 'serrer à droite', TU: 'demi-tour', TRU: 'demi-tour' };
+  function osmandTurn(h) {
+    if (h.cmd === 13) return 'RNDB' + (h.exit || 1);
+    if (h.cmd === 14) return 'RNLB' + (h.exit || 1);
+    return OSMAND_TURN[h.cmd] || null;
+  }
+
+  // GPX 1.1 pour OsmAnd : trace + consignes de virage (<rte>) + points d'intérêt
+  function buildGpx(name, coords, wpts, hints) {
+    var withTurns = hints && hints.length;
     var out = ['<?xml version="1.0" encoding="UTF-8"?>',
-      '<gpx version="1.1" creator="Piste" xmlns="http://www.topografix.com/GPX/1/1" xmlns:osmand="https://osmand.net">',
+      '<gpx version="1.1" creator="' + (withTurns ? 'OsmAndRouter' : 'Piste') + '" xmlns="http://www.topografix.com/GPX/1/1" xmlns:osmand="https://osmand.net">',
       '<metadata><name>' + esc(name) + '</name></metadata>'];
     (wpts || []).forEach(function (w) {
       out.push('<wpt lat="' + w.lat.toFixed(6) + '" lon="' + w.lng.toFixed(6) + '"><name>' + esc(w.name) + '</name>' +
         (w.desc ? '<desc>' + esc(w.desc) + '</desc>' : '') +
         (w.icon ? '<extensions><osmand:icon>' + esc(w.icon) + '</osmand:icon></extensions>' : '') + '</wpt>');
     });
+    if (withTurns) {
+      var last = coords.length - 1, pt = function (c) { return 'lat="' + c[0].toFixed(6) + '" lon="' + c[1].toFixed(6) + '"'; };
+      out.push('<rte>');
+      out.push('<rtept ' + pt(coords[0]) + '><desc>start</desc><extensions><offset>0</offset></extensions></rtept>');
+      hints.forEach(function (h) {
+        var code = osmandTurn(h); if (!code || h.idx <= 0 || h.idx >= last) return;
+        var desc = /^RN/.test(code) ? 'rond-point, sortie ' + (h.exit || 1) : OSMAND_DESC[code];
+        out.push('<rtept ' + pt(coords[h.idx]) + '><desc>' + esc(desc) + '</desc><extensions><turn>' + code + '</turn><turn-angle>' +
+          Math.round(h.angle || 0) + '</turn-angle><offset>' + h.idx + '</offset></extensions></rtept>');
+      });
+      out.push('<rtept ' + pt(coords[last]) + '><desc>destination</desc><extensions><offset>' + last + '</offset></extensions></rtept>');
+      out.push('</rte>');
+    }
     out.push('<trk><name>' + esc(name) + '</name>');
     out.push('<extensions><osmand:color>#D9822B</osmand:color><osmand:width>bold</osmand:width></extensions>');
     out.push('<trkseg>');

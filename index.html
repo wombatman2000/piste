@@ -172,6 +172,11 @@ h2 { font: 700 15px/1.2 var(--display); letter-spacing: .12em; text-transform: u
 .seg2 button { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 9px 6px; font-weight: 600; }
 .seg2 button[aria-pressed="true"] { background: var(--moss); color: var(--moss-ink); border-color: var(--moss); }
 .flag { width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--ok); border: 3px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.4); }
+.choices { display: grid; gap: 10px; margin-top: 12px; }
+.choice { text-align: left; border: 1px solid var(--line); background: var(--bg); border-radius: 14px; padding: 14px; display: grid; gap: 4px; }
+.choice strong { font: 700 20px/1.1 var(--display); letter-spacing: .04em; text-transform: uppercase; }
+.choice span { color: var(--muted); font-size: 14px; }
+.choice:active { border-color: var(--accent); }
 .compass { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 260px; margin: 0 auto; }
 .compass button { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 10px 0; font: 700 16px/1 var(--display); letter-spacing: .06em; }
 .compass button.mid { font: 500 13px/1.1 var(--body); letter-spacing: 0; }
@@ -268,7 +273,7 @@ body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
   </div>
   <div class="row">
     <button class="btn" id="btnOffline" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg><span>Carte hors ligne</span></button>
-    <button class="btn" id="btnSend" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg>Envoyer à OsmAnd</button>
+    <button class="btn" id="btnSend" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg>Ouvrir dans OsmAnd</button>
   </div>
 
   <h2>Profil d'altitude</h2>
@@ -295,9 +300,9 @@ body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
 
   <h2>Dans OsmAnd</h2>
   <ol class="steps">
-    <li>« Envoyer à OsmAnd », puis choisis OsmAnd dans le menu de partage.</li>
-    <li>Dans OsmAnd : <em>Naviguer → Suivre la trace</em>, sélectionne la trace.</li>
-    <li>Laisse « Attacher aux routes » désactivé pour suivre exactement le tracé.</li>
+    <li>« Naviguer » puis « Dans OsmAnd » (ou « Ouvrir dans OsmAnd »), et choisis OsmAnd dans le menu de partage. La première fois, OsmAnd peut se trouver sous « Plus ».</li>
+    <li>Dans OsmAnd, ouvre la trace importée puis <em>Suivre la trace</em>. Les consignes de virage calculées par Piste sont incluses.</li>
+    <li>Laisse « Attacher aux routes » désactivé pour suivre exactement le tracé. OsmAnd guide écran verrouillé et sur CarPlay.</li>
     <li>Pour les recalculs hors trace, utilise le profil Moto avec « Préférer les routes non revêtues ».</li>
   </ol>
 
@@ -331,6 +336,7 @@ body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
     <label class="field">Moyenne sur route (km/h)<input id="fVRoute" type="number" inputmode="numeric" min="20" max="110"></label>
     <label class="field">Moyenne en chemin (km/h)<input id="fVTT" type="number" inputmode="numeric" min="5" max="60"></label>
   </div>
+  <label class="field" style="margin-top:10px">Guidage avec le bouton Naviguer<select id="fNavMode"><option value="ask">Me demander à chaque fois</option><option value="piste">Toujours dans Piste</option><option value="osmand">Toujours dans OsmAnd</option></select></label>
   <label class="check"><input id="fFords" type="checkbox">Éviter les gués</label>
   <label class="check"><input id="fG5" type="checkbox">Autoriser les chemins très dégradés (grade 5)</label>
   <p class="note">La dose de tout-terrain se règle en haut : Roulant garde surtout la route et les pistes stabilisées, Engagé cherche le plus de chemins possible quitte à allonger nettement le trajet.</p>
@@ -382,6 +388,24 @@ body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
     <button class="nav-btn" id="navCenter" type="button" aria-label="Recentrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
     <button class="nav-btn stop" id="navStop" type="button" aria-label="Arrêter la navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
+</div>
+
+<div class="sheet panel" id="navChoice" hidden>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding-top:12px">
+    <h2 style="margin:0">Guidage</h2>
+    <button class="icon-btn" id="btnCloseChoice" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <div class="choices">
+    <button class="choice" id="choosePiste" type="button">
+      <strong>Dans Piste</strong>
+      <span>Écran de l'appli, voix et recalcul hors parcours. L'écran doit rester allumé, appli au premier plan.</span>
+    </button>
+    <button class="choice" id="chooseOsmand" type="button">
+      <strong>Dans OsmAnd</strong>
+      <span>Fonctionne écran verrouillé, sur CarPlay et Android Auto. Choisis OsmAnd dans le menu de partage, puis « Suivre la trace ».</span>
+    </button>
+  </div>
+  <label class="check"><input id="fRememberNav" type="checkbox">Retenir mon choix (modifiable dans les réglages)</label>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -857,7 +881,7 @@ $('btnSend').onclick = function () {
   var wpts = state.stations.map(function (s) {
     return { lat: s.lat, lng: s.lng, name: 'Essence · ' + s.name, desc: 'km ' + Math.round(s.at / 1000), icon: 'amenity_fuel' };
   });
-  var gpx = C.buildGpx(name, r.coords, wpts);
+  var gpx = C.buildGpx(name, r.coords, wpts, r.hints);
   var fname = name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') + '.gpx';
   var file = null;
   try { file = new File([gpx], fname, { type: 'application/gpx+xml' }); } catch (e) {}
@@ -952,7 +976,7 @@ function openSaved(it) {
 
 /* ---------- Position ---------- */
 var lastFix = null, watchId = null, posWaiters = [], lastGeoErr = null;
-var APP_VERSION = '9';
+var APP_VERSION = '10';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
@@ -1223,7 +1247,21 @@ function stopNav() {
   document.body.classList.remove('navmode'); $('nav').hidden = true;
   setTimeout(function () { map.invalidateSize(); }, 50);
 }
-$('btnNav').onclick = startNav;
+settings.navMode = settings.navMode || 'ask';
+$('fNavMode').value = settings.navMode;
+$('fNavMode').onchange = function () { settings.navMode = this.value; save('settings', settings); };
+$('btnNav').onclick = function () {
+  if (settings.navMode === 'piste') return startNav();
+  if (settings.navMode === 'osmand') return $('btnSend').click();
+  $('fRememberNav').checked = false; $('navChoice').hidden = false;
+};
+function rememberNav(mode) {
+  $('navChoice').hidden = true;
+  if ($('fRememberNav').checked) { settings.navMode = mode; save('settings', settings); $('fNavMode').value = mode; }
+}
+$('btnCloseChoice').onclick = function () { $('navChoice').hidden = true; };
+$('choosePiste').onclick = function () { rememberNav('piste'); startNav(); };
+$('chooseOsmand').onclick = function () { rememberNav('osmand'); $('btnSend').click(); };
 var stopArmed = false;
 $('navStop').onclick = function () {
   if (!stopArmed) { stopArmed = true; toast('Touche encore pour arrêter la navigation', 2500); setTimeout(function () { stopArmed = false; }, 2500); return; }
