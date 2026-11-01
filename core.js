@@ -73,6 +73,23 @@
     return finish(coords, segs, total, parseFloat(props['filtered ascend']));
   }
 
+  // Assemble plusieurs réponses BRouter (une par étape) en une seule
+  function mergeBrouter(jsons) {
+    if (jsons.length === 1) return jsons[0];
+    var coords = [], msgs = null, len = 0, asc = 0;
+    jsons.forEach(function (j, k) {
+      var f = j.features[0], c = f.geometry.coordinates, p = f.properties || {};
+      coords = coords.concat(k === 0 ? c : c.slice(1));
+      len += parseFloat(p['track-length']) || 0;
+      asc += parseFloat(p['filtered ascend']) || 0;
+      var m = p.messages || [];
+      if (!msgs) msgs = m.slice(); else msgs = msgs.concat(m.slice(1));
+    });
+    return { type: 'FeatureCollection', features: [{ type: 'Feature',
+      properties: { 'track-length': String(len), 'filtered ascend': String(asc), messages: msgs || [] },
+      geometry: { type: 'LineString', coordinates: coords } }] };
+  }
+
   // Parcours importé (GPX) sans information de revêtement
   function fromCoords(coords) {
     var cum = cumulative(coords);
@@ -296,7 +313,7 @@
   }
 
   var api = {
-    snapToTracks: snapToTracks, destination: destination, loopRadius: loopRadius, loopWaypoints: loopWaypoints, BEARINGS: BEARINGS,
+    mergeBrouter: mergeBrouter, snapToTracks: snapToTracks, destination: destination, loopRadius: loopRadius, loopWaypoints: loopWaypoints, BEARINGS: BEARINGS,
     haversine: haversine, cumulative: cumulative, parseTags: parseTags, surfaceClass: surfaceClass,
     parseBrouter: parseBrouter, fromCoords: fromCoords, computeAscend: computeAscend,
     unpavedShare: unpavedShare, estimateHours: estimateHours, sample: sample,
