@@ -236,7 +236,7 @@
   }
 
   // Facteur moyen entre distance à vol d'oiseau et distance roulée, selon la dose de TT
-  var DETOUR = { 1: 1.25, 2: 1.35, 3: 1.5 };
+  var DETOUR = { 1: 1.25, 2: 1.4, 3: 1.65 };
 
   // Rayon du cercle pour viser distM (polygone à n côtés, départ compris)
   function loopRadius(distM, n, level) {
@@ -261,8 +261,42 @@
 
   var BEARINGS = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SO: 225, O: 270, NO: 315 };
 
+  // Déplace chaque point intermédiaire au milieu du chemin autorisé le plus proche
+  // ways : [{id, tags, coords:[[lat,lng],...]}] ; maxDist en mètres
+  function snapToTracks(wps, ways, maxDist, opts) {
+    opts = opts || {};
+    var minLen = opts.minLen || 400;
+    var cands = [];
+    ways.forEach(function (w) {
+      if (motoAccess(w.tags || {}) === 'interdit') return;
+      var cls = surfaceClass(w.tags || {});
+      if (cls === 'revetu') return;
+      if (opts.noGrade5 && (w.tags || {}).tracktype === 'grade5') return;
+      var cum = cumulative(w.coords), len = cum[cum.length - 1];
+      if (len < minLen) return;
+      var mid = 0;
+      while (mid < cum.length - 1 && cum[mid] < len / 2) mid++;
+      cands.push({ id: w.id, pt: w.coords[mid], len: len });
+    });
+    var used = {};
+    return wps.map(function (p, i) {
+      if (i === 0 || i === wps.length - 1) return p;
+      var best = null, bestScore = Infinity;
+      cands.forEach(function (c) {
+        if (used[c.id]) return;
+        var d = haversine(p, c.pt);
+        if (d > maxDist) return;
+        var score = d - Math.min(c.len, 3000) * 0.3; // préfère les chemins longs
+        if (score < bestScore) { bestScore = score; best = c; }
+      });
+      if (!best) return p;
+      used[best.id] = 1;
+      return [best.pt[0], best.pt[1]];
+    });
+  }
+
   var api = {
-    destination: destination, loopRadius: loopRadius, loopWaypoints: loopWaypoints, BEARINGS: BEARINGS,
+    snapToTracks: snapToTracks, destination: destination, loopRadius: loopRadius, loopWaypoints: loopWaypoints, BEARINGS: BEARINGS,
     haversine: haversine, cumulative: cumulative, parseTags: parseTags, surfaceClass: surfaceClass,
     parseBrouter: parseBrouter, fromCoords: fromCoords, computeAscend: computeAscend,
     unpavedShare: unpavedShare, estimateHours: estimateHours, sample: sample,

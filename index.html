@@ -886,7 +886,7 @@ function openSaved(it) {
 
 /* ---------- Position ---------- */
 var lastFix = null, watchId = null, posWaiters = [], lastGeoErr = null;
-var APP_VERSION = '5';
+var APP_VERSION = '6';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
@@ -999,6 +999,22 @@ $('btnCloseLoop').onclick = function () { $('loopPanel').hidden = true; };
 $('btnMakeLoop').onclick = function () { loopSeed = Math.floor(Math.random() * 1e9) + 1; makeLoop(); };
 $('btnLoopAgain').onclick = function () { loopSeed += 7919; makeLoop(); };
 
+// Accroche les points de la boucle sur de vrais chemins autorisés (Mixte et Engagé)
+function snapLoop(wps, radius) {
+  if (state.level < 2) return Promise.resolve(wps);
+  var R = Math.round(Math.min(2500, Math.max(800, radius * 0.3)));
+  var q = '[out:json][timeout:25];(' + wps.slice(1, -1).map(function (p) {
+    var a = '(around:' + R + ',' + p[0].toFixed(5) + ',' + p[1].toFixed(5) + ')';
+    return 'way["highway"="track"]' + a + ';way["highway"~"^(unclassified|road)$"]["surface"~"^(unpaved|gravel|fine_gravel|compacted|ground|dirt|earth|grass|sand|pebblestone)$"]' + a + ';';
+  }).join('') + ');out body geom;';
+  return overpass(q).then(function (j) {
+    var ways = (j.elements || []).filter(function (w) { return w.geometry; }).map(function (w) {
+      return { id: w.id, tags: w.tags || {}, coords: w.geometry.map(function (g) { return [g.lat, g.lon]; }) };
+    });
+    return C.snapToTracks(wps, ways, R, { noGrade5: !settings.g5 });
+  }).catch(function () { return wps; }); // Overpass indisponible : on garde les points d'origine
+}
+
 function makeLoop() {
   if (loopBusy) return;
   loopBusy = true; busy(true);
@@ -1019,8 +1035,9 @@ function makeLoop() {
     startPt = start;
     var attempt = 0;
     function step() {
-      var wps = C.loopWaypoints(start, bearing, radius, n, seed + attempt * 101);
-      return routeFor(wps).then(function (r) {
+      var raw = C.loopWaypoints(start, bearing, radius, n, seed + attempt * 101);
+      return snapLoop(raw, radius).then(function (wps) { return routeFor(wps).then(function (r) { return { wps: wps, r: r }; }); }).then(function (res) {
+        var wps = res.wps, r = res.r;
         var err = Math.abs(r.length - target) / target;
         if (!best || err < best.err) best = { wps: wps, route: r, err: err };
         attempt++;
