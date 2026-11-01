@@ -273,7 +273,7 @@ body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
   </div>
   <div class="row">
     <button class="btn" id="btnOffline" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg><span>Carte hors ligne</span></button>
-    <button class="btn" id="btnSend" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg>Ouvrir dans OsmAnd</button>
+    <a class="btn" id="btnSend" href="#" download="piste.gpx" style="text-decoration:none"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M5 21h14"/></svg>Télécharger le GPX</a>
   </div>
 
   <h2>Profil d'altitude</h2>
@@ -298,12 +298,11 @@ body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
   </div>
   <ul class="list" id="saved" style="margin-top:10px"></ul>
 
-  <h2>Dans OsmAnd</h2>
+  <h2>Guider avec une autre appli</h2>
   <ol class="steps">
-    <li>« Naviguer » puis « Dans OsmAnd » (ou « Ouvrir dans OsmAnd »), et choisis OsmAnd dans le menu de partage. La première fois, OsmAnd peut se trouver sous « Plus ».</li>
-    <li>Dans OsmAnd, ouvre la trace importée puis <em>Suivre la trace</em>. Les consignes de virage calculées par Piste sont incluses.</li>
-    <li>Laisse « Attacher aux routes » désactivé pour suivre exactement le tracé. OsmAnd guide écran verrouillé et sur CarPlay.</li>
-    <li>Pour les recalculs hors trace, utilise le profil Moto avec « Préférer les routes non revêtues ».</li>
+    <li>« Naviguer » puis « Télécharger la trace » (ou « Télécharger le GPX »). Le fichier va dans l'app Fichiers, dossier Téléchargements.</li>
+    <li>Dans Fichiers, appui long sur le fichier → <strong>Partager</strong> → ton appli de guidage. Ou importe-le depuis l'appli elle-même.</li>
+    <li>Le fichier contient la trace, les virages au format OsmAnd et les stations repérées. Il se lit dans OsmAnd, Calimoto, Kurviger, DMD2 (sur Android, via DMD HUB) et la plupart des GPS.</li>
   </ol>
 
   <p class="legal">Le calcul exclut les voies marquées interdites aux motos dans OpenStreetMap ainsi que les sentiers, pistes cyclables et chemins piétons ou cavaliers. La carte peut être incomplète ou datée : arrêtés municipaux et préfectoraux, panneaux et barrières sur place priment (C. env. art. L362-1). Itinéraires calculés par BRouter, données © contributeurs OpenStreetMap.</p>
@@ -336,7 +335,7 @@ body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
     <label class="field">Moyenne sur route (km/h)<input id="fVRoute" type="number" inputmode="numeric" min="20" max="110"></label>
     <label class="field">Moyenne en chemin (km/h)<input id="fVTT" type="number" inputmode="numeric" min="5" max="60"></label>
   </div>
-  <label class="field" style="margin-top:10px">Guidage avec le bouton Naviguer<select id="fNavMode"><option value="ask">Me demander à chaque fois</option><option value="piste">Toujours dans Piste</option><option value="osmand">Toujours dans OsmAnd</option></select></label>
+  <label class="field" style="margin-top:10px">Guidage avec le bouton Naviguer<select id="fNavMode"><option value="ask">Me demander à chaque fois</option><option value="piste">Toujours dans Piste</option><option value="gpx">Toujours télécharger la trace</option></select></label>
   <label class="check"><input id="fFords" type="checkbox">Éviter les gués</label>
   <label class="check"><input id="fG5" type="checkbox">Autoriser les chemins très dégradés (grade 5)</label>
   <p class="note">La dose de tout-terrain se règle en haut : Roulant garde surtout la route et les pistes stabilisées, Engagé cherche le plus de chemins possible quitte à allonger nettement le trajet.</p>
@@ -400,37 +399,12 @@ body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
       <strong>Dans Piste</strong>
       <span>Écran de l'appli, voix et recalcul hors parcours. L'écran doit rester allumé, appli au premier plan.</span>
     </button>
-    <button class="choice" id="chooseOsmand" type="button">
-      <strong>Dans OsmAnd</strong>
-      <span>Fonctionne écran verrouillé, sur CarPlay et Android Auto. Choisis OsmAnd dans le menu de partage, puis « Suivre la trace ».</span>
-    </button>
-  </div>
-  <label class="check"><input id="fRememberNav" type="checkbox">Retenir mon choix (modifiable dans les réglages)</label>
-</div>
-
-<div class="sheet panel" id="osmandPanel" hidden>
-  <div style="display:flex;align-items:center;justify-content:space-between;padding-top:12px">
-    <h2 style="margin:0">Envoyer vers OsmAnd</h2>
-    <button class="icon-btn" id="btnCloseOsmand" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
-  </div>
-  <p class="note" style="margin:6px 0 0">Fichier : <strong id="gpxName"></strong> (trace, virages et stations).</p>
-  <div class="choices">
-    <button class="choice" id="btnShareGpx" type="button">
-      <strong>1 · Partager vers OsmAnd</strong>
-      <span>Dans le menu, touche OsmAnd (fais défiler la rangée d'apps ou « Plus »). S'il n'apparaît pas, choisis « Enregistrer dans Fichiers ».</span>
-    </button>
-    <a class="choice" id="gpxLink" href="#" download="piste.gpx" style="text-decoration:none;color:inherit">
-      <strong>2 · Enregistrer le fichier</strong>
-      <span>Le GPX va dans l'app Fichiers, dossier Téléchargements.</span>
+    <a class="choice" id="chooseGpx" href="#" download="piste.gpx" style="text-decoration:none;color:inherit">
+      <strong>Télécharger la trace</strong>
+      <span>Pour guider avec une autre appli (OsmAnd, CarPlay, Android Auto, GPS moto). Le fichier GPX va dans Fichiers → Téléchargements.</span>
     </a>
   </div>
-  <p class="field" style="margin:14px 0 6px">Ensuite, si OsmAnd ne s'est pas ouvert tout seul</p>
-  <ol class="steps">
-    <li>Ouvre l'app <strong>Fichiers</strong> → Téléchargements (ou l'endroit choisi).</li>
-    <li>Touche longuement le fichier → <strong>Partager</strong> → <strong>OsmAnd</strong>.</li>
-    <li>Ou, dans OsmAnd : Menu → Mes lieux → Traces → <strong>Importer</strong>, puis choisis le fichier.</li>
-    <li>Ouvre la trace → <strong>Suivre la trace</strong>.</li>
-  </ol>
+  <label class="check"><input id="fRememberNav" type="checkbox">Retenir mon choix (modifiable dans les réglages)</label>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -746,7 +720,9 @@ function renderStats() {
       s.title = LABELS[k] + ' : ' + (r.mix[k] / 1000).toFixed(1) + ' km'; mix.appendChild(s);
     });
   }
-  $('btnSend').disabled = !r; $('btnNav').disabled = !r; $('btnOffline').disabled = !r;
+  $('btnNav').disabled = !r; $('btnOffline').disabled = !r;
+  $('btnSend').style.opacity = r ? '' : '.45'; $('btnSend').style.pointerEvents = r ? '' : 'none';
+  refreshGpxLinks();
   drawChart();
 }
 
@@ -858,7 +834,7 @@ $('btnFuel').onclick = function () {
       var k = Math.round(s.lat * 2000) + ':' + Math.round(s.lng * 2000);
       if (seen[k]) return false; seen[k] = 1; return true;
     }).sort(function (a, b) { return a.at - b.at; });
-    renderFuel(true);
+    renderFuel(true); refreshGpxLinks();
   }).catch(function () { toast('Recherche des stations impossible pour le moment'); })
     .then(function () { busy(false); $('btnFuel').disabled = false; });
 };
@@ -900,44 +876,34 @@ function routeName() {
   if (state.imported) return state.imported.name;
   return 'Piste ' + new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
-var exportFile = null;
-function prepareGpx() {
-  var r = state.route; if (!r) return null;
+// Liens de téléchargement du GPX, tenus à jour avec le parcours (un vrai lien est plus fiable sur iPhone)
+var gpxUrl = null;
+function refreshGpxLinks() {
+  var r = state.route;
+  if (gpxUrl) { URL.revokeObjectURL(gpxUrl); gpxUrl = null; }
+  if (!r) return;
   var name = routeName();
   var wpts = state.stations.map(function (s) {
     return { lat: s.lat, lng: s.lng, name: 'Essence · ' + s.name, desc: 'km ' + Math.round(s.at / 1000), icon: 'amenity_fuel' };
   });
   var gpx = C.buildGpx(name, r.coords, wpts, r.hints);
   var fname = (name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') || 'piste') + '.gpx';
-  return { name: name, gpx: gpx, fname: fname };
+  gpxUrl = URL.createObjectURL(new Blob([gpx], { type: 'application/octet-stream' }));
+  ['btnSend', 'chooseGpx'].forEach(function (id) { var a = $(id); a.href = gpxUrl; a.download = fname; });
 }
-$('btnSend').onclick = function () {
-  exportFile = prepareGpx(); if (!exportFile) return;
-  var a = $('gpxLink');
-  if (a.href && a.href.indexOf('blob:') === 0) URL.revokeObjectURL(a.href);
-  a.href = URL.createObjectURL(new Blob([exportFile.gpx], { type: 'application/octet-stream' }));
-  a.download = exportFile.fname;
-  $('gpxName').textContent = exportFile.fname;
-  $('btnShareGpx').hidden = !navigator.share;
-  $('osmandPanel').hidden = false; $('navChoice').hidden = true;
-};
-$('btnCloseOsmand').onclick = function () { $('osmandPanel').hidden = true; };
-// Partage : essaie plusieurs types, iOS ne reconnaît pas toujours le type GPX
-$('btnShareGpx').onclick = function () {
-  if (!exportFile) return;
-  var types = ['application/gpx+xml', 'application/octet-stream', 'text/xml'], file = null;
-  for (var i = 0; i < types.length; i++) {
-    try {
-      var f = new File([exportFile.gpx], exportFile.fname, { type: types[i] });
-      if (navigator.canShare && navigator.canShare({ files: [f] })) { file = f; break; }
-    } catch (e) {}
-  }
-  if (!file) { toast('Partage de fichier refusé par le téléphone : utilise « Enregistrer le fichier »', 5000); return; }
-  navigator.share({ files: [file] }).catch(function (e) {
-    if (e.name !== 'AbortError') toast('Partage impossible : utilise « Enregistrer le fichier »', 5000);
+function afterDownload() {
+  $('navChoice').hidden = true;
+  setTimeout(function () { toast('Trace enregistrée dans Fichiers → Téléchargements. Appui long dessus → Partager → ton appli.', 7000); }, 600);
+}
+['btnSend', 'chooseGpx'].forEach(function (id) {
+  $(id).addEventListener('click', function (e) {
+    if (!state.route) { e.preventDefault(); return; }
+    refreshGpxLinks(); // nom et stations à jour au moment du clic
+    if (id === 'chooseGpx' && $('fRememberNav').checked) { settings.navMode = 'gpx'; save('settings', settings); $('fNavMode').value = 'gpx'; }
+    afterDownload();
   });
-};
-$('gpxLink').addEventListener('click', function () { setTimeout(function () { toast('Fichier enregistré dans Fichiers → Téléchargements', 4000); }, 800); });
+});
+$('fName').addEventListener('change', refreshGpxLinks);
 
 /* ---------- Import GPX ---------- */
 $('btnImport').onclick = function () { $('fileGpx').click(); };
@@ -1016,7 +982,7 @@ function openSaved(it) {
 
 /* ---------- Position ---------- */
 var lastFix = null, watchId = null, posWaiters = [], lastGeoErr = null;
-var APP_VERSION = '11';
+var APP_VERSION = '12';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
@@ -1287,12 +1253,12 @@ function stopNav() {
   document.body.classList.remove('navmode'); $('nav').hidden = true;
   setTimeout(function () { map.invalidateSize(); }, 50);
 }
-settings.navMode = settings.navMode || 'ask';
+settings.navMode = settings.navMode === 'osmand' ? 'gpx' : (settings.navMode || 'ask');
 $('fNavMode').value = settings.navMode;
 $('fNavMode').onchange = function () { settings.navMode = this.value; save('settings', settings); };
 $('btnNav').onclick = function () {
   if (settings.navMode === 'piste') return startNav();
-  if (settings.navMode === 'osmand') return $('btnSend').click();
+  if (settings.navMode === 'gpx') { refreshGpxLinks(); $('btnSend').click(); return; }
   $('fRememberNav').checked = false; $('navChoice').hidden = false;
 };
 function rememberNav(mode) {
@@ -1301,7 +1267,7 @@ function rememberNav(mode) {
 }
 $('btnCloseChoice').onclick = function () { $('navChoice').hidden = true; };
 $('choosePiste').onclick = function () { rememberNav('piste'); startNav(); };
-$('chooseOsmand').onclick = function () { rememberNav('osmand'); $('btnSend').click(); };
+
 var stopArmed = false;
 $('navStop').onclick = function () {
   if (!stopArmed) { stopArmed = true; toast('Touche encore pour arrêter la navigation', 2500); setTimeout(function () { stopArmed = false; }, 2500); return; }
