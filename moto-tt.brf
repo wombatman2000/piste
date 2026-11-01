@@ -1,0 +1,157 @@
+# Profil BRouter " Moto TT " pour l'appli Piste
+# Moto trail / enduro legere : privilegie chemins et routes non revetues
+# ouverts a la circulation motorisee, evite autoroutes et grands axes.
+#
+# Exclut les voies interdites aux motos dans OSM :
+#   motorcycle / motor_vehicle / vehicle / access = no, private,
+#   agricultural, forestry ; sentiers, pistes cyclables, chemins pietons
+#   et cavaliers. OSM reste incomplet : les arretes locaux et la
+#   signalisation sur place priment toujours.
+
+---context:global
+
+assign niveau          = 2      # %niveau% | Dose de tout-terrain : 1 roulant, 2 mixte, 3 engage | [1=roulant, 2=mixte, 3=engage]
+assign eviter_gues     = false  # %eviter_gues% | Eviter les gues | boolean
+assign allow_grade5    = true   # %allow_grade5% | Autoriser les chemins grade5 (herbe, ornieres) | boolean
+
+assign downhillcost    0
+assign downhillcutoff  0
+assign uphillcost      0
+assign uphillcutoff    0
+
+assign validForCars    1
+assign turnInstructionMode = 1  # %turnInstructionMode% | Instructions | [0=none, 1=auto-choose, 3=osmand-style]
+
+---context:way
+
+assign turncost = if junction=roundabout then 0 else 20
+
+assign initialclassifier = if route=ferry then 1 else 0
+assign initialcost = switch route=ferry 20000 0
+
+assign isresidentialorliving = or highway=residential|living_street living_street=yes
+
+# Acces par defaut selon le type de voie (aucune etiquette d'acces)
+assign defaultaccess =
+       switch highway=motorway|motorway_link          1
+       switch highway=trunk|trunk_link                1
+       switch highway=primary|primary_link            1
+       switch highway=secondary|secondary_link        1
+       switch highway=tertiary|tertiary_link          1
+       switch highway=unclassified                    1
+       switch isresidentialorliving                   1
+       switch highway=service                         1
+       switch highway=track                           1
+       switch highway=road                            1
+       switch route=ferry                             1
+       0
+
+assign motoaccess =
+       switch motorcycle=
+              switch motor_vehicle=
+                     switch vehicle=
+                            switch access=
+                                   defaultaccess
+                                   access=yes|permissive|designated|destination
+                            vehicle=yes|permissive|designated|destination
+                     motor_vehicle=yes|permissive|designated|destination
+              motorcycle=yes|permissive|designated|destination
+
+assign isbadoneway = if reversedirection=yes then ( if oneway= then junction=roundabout else oneway=yes|true|1 ) else oneway=-1
+
+# Classe de revetement : 0 revetu, 1 a 5 comme tracktype
+assign revetement =
+       switch tracktype=grade1 1
+       switch tracktype=grade2 2
+       switch tracktype=grade3 3
+       switch tracktype=grade4 4
+       switch tracktype=grade5 5
+       switch surface=gravel|fine_gravel|compacted|pebblestone 2
+       switch surface=unpaved|ground|dirt|earth|clay 3
+       switch surface=grass|mud|sand|rock|stone 4
+       switch surface=asphalt|paved|concrete|paving_stones|cobblestone|sett|metal|wood|grass_paver 0
+       switch highway=track 3
+       0
+
+assign difficile = or smoothness=very_bad|horrible|very_horrible|off_road_wheels 4wd_only=yes|recommended
+
+# Facteur de cout selon la dose de TT (plus bas = plus recherche)
+assign cout_revetu =
+       if highway=motorway|motorway_link then 30
+       else if highway=trunk|trunk_link then ( if equal niveau 1 then 4 else if equal niveau 2 then 6 else 9 )
+       else if highway=primary|primary_link then ( if equal niveau 1 then 2.4 else if equal niveau 2 then 3.6 else 5 )
+       else if highway=secondary|secondary_link then ( if equal niveau 1 then 1.9 else if equal niveau 2 then 2.8 else 4 )
+       else if highway=tertiary|tertiary_link then ( if equal niveau 1 then 1.5 else if equal niveau 2 then 2.2 else 3.2 )
+       else if highway=service then ( if equal niveau 1 then 2 else if equal niveau 2 then 2.6 else 3.4 )
+       else ( if equal niveau 1 then 1.35 else if equal niveau 2 then 1.9 else 2.7 )
+
+assign cout_terre =
+       if equal revetement 1 then ( if equal niveau 1 then 1.15 else if equal niveau 2 then 1.4 else 2 )
+       else if equal revetement 2 then ( if equal niveau 1 then 1 else if equal niveau 2 then 1.05 else 1.3 )
+       else if equal revetement 3 then ( if equal niveau 1 then 1.15 else 1 )
+       else if equal revetement 4 then ( if equal niveau 1 then 1.9 else if equal niveau 2 then 1.25 else 1 )
+       else ( if not allow_grade5 then 10000 else if equal niveau 1 then 4 else if equal niveau 2 then 1.9 else 1.1 )
+
+assign penalite_difficile =
+       if smoothness=impassable then 10000
+       else if difficile then ( if equal niveau 1 then 3 else if equal niveau 2 then 0.6 else 0 )
+       else 0
+
+assign penalite_gue =
+       if ford=yes|stepping_stones then ( if eviter_gues then 10000 else if equal niveau 1 then 4 else if equal niveau 2 then 1 else 0 )
+       else 0
+
+assign costfactor =
+       if not motoaccess then 10000
+       else if isbadoneway then 10000
+       else if route=ferry then 5
+       else min 10000
+            add penalite_gue
+            add penalite_difficile
+            ( if equal revetement 0 then cout_revetu else cout_terre )
+
+# Classement pour les instructions vocales
+assign priorityclassifier =
+       if      ( highway=motorway|motorway_link  ) then 30
+       else if ( highway=trunk|trunk_link        ) then 28
+       else if ( highway=primary|primary_link    ) then 26
+       else if ( highway=secondary|secondary_link ) then 24
+       else if ( highway=tertiary|tertiary_link  ) then 22
+       else if ( highway=unclassified            ) then 20
+       else if ( isresidentialorliving           ) then 6
+       else if ( highway=service                 ) then 6
+       else if ( highway=track                   ) then ( if tracktype=grade1 then 4 else 2 )
+       else 0
+
+assign isgoodoneway = if reversedirection=yes then oneway=-1
+                      else if oneway= then junction=roundabout else oneway=yes|true|1
+assign isroundabout = junction=roundabout
+assign islinktype   = highway=motorway_link|trunk_link|primary_link|secondary_link|tertiary_link
+assign isgoodforcars = if greater priorityclassifier 6 then true
+                       else if or isresidentialorliving highway=service then true
+                       else false
+
+assign classifiermask add          isbadoneway
+                      add multiply isgoodoneway   2
+                      add multiply isroundabout   4
+                      add multiply islinktype     8
+                      add multiply isgoodforcars 16
+                          multiply isresidentialorliving 32
+
+---context:node
+
+assign motoaccess =
+       switch motorcycle=
+              switch motor_vehicle=
+                     switch vehicle=
+                            switch access=
+                                   not barrier=bollard|block|stile|cycle_barrier|kissing_gate|turnstile|full-height_turnstile|horse_stile|motorcycle_barrier|chain|log|fence|wall|ditch|jersey_barrier
+                                   access=yes|permissive|designated|destination
+                            vehicle=yes|permissive|designated|destination
+                     motor_vehicle=yes|permissive|designated|destination
+              motorcycle=yes|permissive|designated|destination
+
+assign initialcost =
+       if not motoaccess then 1000000
+       else if barrier=gate|lift_gate|swing_gate then 300
+       else 0
