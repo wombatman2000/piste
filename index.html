@@ -408,6 +408,31 @@ body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
   <label class="check"><input id="fRememberNav" type="checkbox">Retenir mon choix (modifiable dans les réglages)</label>
 </div>
 
+<div class="sheet panel" id="osmandPanel" hidden>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding-top:12px">
+    <h2 style="margin:0">Envoyer vers OsmAnd</h2>
+    <button class="icon-btn" id="btnCloseOsmand" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <p class="note" style="margin:6px 0 0">Fichier : <strong id="gpxName"></strong> (trace, virages et stations).</p>
+  <div class="choices">
+    <button class="choice" id="btnShareGpx" type="button">
+      <strong>1 · Partager vers OsmAnd</strong>
+      <span>Dans le menu, touche OsmAnd (fais défiler la rangée d'apps ou « Plus »). S'il n'apparaît pas, choisis « Enregistrer dans Fichiers ».</span>
+    </button>
+    <a class="choice" id="gpxLink" href="#" download="piste.gpx" style="text-decoration:none;color:inherit">
+      <strong>2 · Enregistrer le fichier</strong>
+      <span>Le GPX va dans l'app Fichiers, dossier Téléchargements.</span>
+    </a>
+  </div>
+  <p class="field" style="margin:14px 0 6px">Ensuite, si OsmAnd ne s'est pas ouvert tout seul</p>
+  <ol class="steps">
+    <li>Ouvre l'app <strong>Fichiers</strong> → Téléchargements (ou l'endroit choisi).</li>
+    <li>Touche longuement le fichier → <strong>Partager</strong> → <strong>OsmAnd</strong>.</li>
+    <li>Ou, dans OsmAnd : Menu → Mes lieux → Traces → <strong>Importer</strong>, puis choisis le fichier.</li>
+    <li>Ouvre la trace → <strong>Suivre la trace</strong>.</li>
+  </ol>
+</div>
+
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
@@ -875,29 +900,44 @@ function routeName() {
   if (state.imported) return state.imported.name;
   return 'Piste ' + new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
 }
-$('btnSend').onclick = function () {
-  var r = state.route; if (!r) return;
+var exportFile = null;
+function prepareGpx() {
+  var r = state.route; if (!r) return null;
   var name = routeName();
   var wpts = state.stations.map(function (s) {
     return { lat: s.lat, lng: s.lng, name: 'Essence · ' + s.name, desc: 'km ' + Math.round(s.at / 1000), icon: 'amenity_fuel' };
   });
   var gpx = C.buildGpx(name, r.coords, wpts, r.hints);
-  var fname = name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') + '.gpx';
-  var file = null;
-  try { file = new File([gpx], fname, { type: 'application/gpx+xml' }); } catch (e) {}
-  if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-    navigator.share({ files: [file], title: name }).catch(function (e) { if (e.name !== 'AbortError') download(gpx, fname); });
-  } else {
-    download(gpx, fname);
-  }
-};
-function download(text, fname) {
-  var a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: 'application/gpx+xml' }));
-  a.download = fname; document.body.appendChild(a); a.click();
-  setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
-  toast('GPX téléchargé : ouvre-le avec OsmAnd');
+  var fname = (name.normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^\w-]+/g, '_').replace(/^_+|_+$/g, '') || 'piste') + '.gpx';
+  return { name: name, gpx: gpx, fname: fname };
 }
+$('btnSend').onclick = function () {
+  exportFile = prepareGpx(); if (!exportFile) return;
+  var a = $('gpxLink');
+  if (a.href && a.href.indexOf('blob:') === 0) URL.revokeObjectURL(a.href);
+  a.href = URL.createObjectURL(new Blob([exportFile.gpx], { type: 'application/octet-stream' }));
+  a.download = exportFile.fname;
+  $('gpxName').textContent = exportFile.fname;
+  $('btnShareGpx').hidden = !navigator.share;
+  $('osmandPanel').hidden = false; $('navChoice').hidden = true;
+};
+$('btnCloseOsmand').onclick = function () { $('osmandPanel').hidden = true; };
+// Partage : essaie plusieurs types, iOS ne reconnaît pas toujours le type GPX
+$('btnShareGpx').onclick = function () {
+  if (!exportFile) return;
+  var types = ['application/gpx+xml', 'application/octet-stream', 'text/xml'], file = null;
+  for (var i = 0; i < types.length; i++) {
+    try {
+      var f = new File([exportFile.gpx], exportFile.fname, { type: types[i] });
+      if (navigator.canShare && navigator.canShare({ files: [f] })) { file = f; break; }
+    } catch (e) {}
+  }
+  if (!file) { toast('Partage de fichier refusé par le téléphone : utilise « Enregistrer le fichier »', 5000); return; }
+  navigator.share({ files: [file] }).catch(function (e) {
+    if (e.name !== 'AbortError') toast('Partage impossible : utilise « Enregistrer le fichier »', 5000);
+  });
+};
+$('gpxLink').addEventListener('click', function () { setTimeout(function () { toast('Fichier enregistré dans Fichiers → Téléchargements', 4000); }, 800); });
 
 /* ---------- Import GPX ---------- */
 $('btnImport').onclick = function () { $('fileGpx').click(); };
@@ -976,7 +1016,7 @@ function openSaved(it) {
 
 /* ---------- Position ---------- */
 var lastFix = null, watchId = null, posWaiters = [], lastGeoErr = null;
-var APP_VERSION = '10';
+var APP_VERSION = '11';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
