@@ -1015,7 +1015,15 @@ if (state.imported && state.imported.coords && state.imported.coords.length > 1)
 startWatch();
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
-  navigator.serviceWorker.register('sw.js').catch(function () {});
+  // Mise à jour immédiate : nouvelle version détectée -> rechargement
+  var hadController = !!navigator.serviceWorker.controller, reloaded = false;
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (hadController && !reloaded) { reloaded = true; location.reload(); }
+  });
+  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(function (reg) {
+    reg.update();
+    document.addEventListener('visibilitychange', function () { if (!document.hidden) reg.update(); });
+  }).catch(function () {});
 }
 })();
 </script>

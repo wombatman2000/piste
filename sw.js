@@ -1,5 +1,5 @@
 // Piste : garde l'appli disponible sans réseau (la carte et le calcul restent en ligne)
-const CACHE = 'piste-v2';
+const CACHE = 'piste-v3';
 const SHELL = ['./', 'index.html', 'core.js', 'moto-tt.brf', 'manifest.webmanifest', 'icon-192.png', 'apple-touch-icon.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'];
 self.addEventListener('install', e => {
@@ -14,7 +14,7 @@ self.addEventListener('fetch', e => {
   const shell = url.origin === location.origin || url.hostname === 'unpkg.com' || url.hostname.endsWith('fonts.gstatic.com') || url.hostname === 'fonts.googleapis.com';
   if (!shell) return; // tuiles, BRouter, Overpass : toujours en direct
   e.respondWith(
-    fetch(e.request).then(r => {
+    fetch(e.request, url.origin === location.origin ? { cache: 'no-store' } : {}).then(r => {
       if (r.ok) { const copy = r.clone(); caches.open(CACHE).then(c => c.put(e.request, copy)); }
       return r;
     }).catch(() => caches.match(e.request).then(r => r || caches.match('index.html')))
