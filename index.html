@@ -167,6 +167,10 @@ h2 { font: 700 15px/1.2 var(--display); letter-spacing: .12em; text-transform: u
 .wp.end { background: var(--accent); color: #fff; border-color: #fff; }
 .fuel { width: 26px; height: 26px; border-radius: 7px; background: #fff; border: 2px solid #1f2622; display: grid; place-items: center; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
 .fuel svg { width: 15px; height: 15px; }
+.seg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+.seg2 button { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 9px 6px; font-weight: 600; }
+.seg2 button[aria-pressed="true"] { background: var(--moss); color: var(--moss-ink); border-color: var(--moss); }
+.flag { width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); background: var(--ok); border: 3px solid #fff; box-shadow: 0 1px 5px rgba(0,0,0,.4); }
 .compass { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 260px; margin: 0 auto; }
 .compass button { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 10px 0; font: 700 16px/1 var(--display); letter-spacing: .06em; }
 .compass button.mid { font: 500 13px/1.1 var(--body); letter-spacing: 0; }
@@ -305,10 +309,15 @@ h2 { font: 700 15px/1.2 var(--display); letter-spacing: .12em; text-transform: u
 
 <div class="sheet panel" id="loopPanel" hidden>
   <div style="display:flex;align-items:center;justify-content:space-between;padding-top:12px">
-    <h2 style="margin:0">Boucle depuis ma position</h2>
+    <h2 style="margin:0">Créer une boucle</h2>
     <button class="icon-btn" id="btnCloseLoop" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
-  <p class="note" id="loopPos" style="margin:6px 0 10px">Recherche de ta position…</p>
+  <p class="field" style="margin:10px 0 6px">Départ</p>
+  <div class="seg2" role="group" aria-label="Point de départ">
+    <button type="button" id="startGps" aria-pressed="true">Ma position</button>
+    <button type="button" id="startMap" aria-pressed="false">Point sur la carte</button>
+  </div>
+  <p class="note" id="loopPos" style="margin:6px 0 12px">Recherche de ta position…</p>
   <label class="field" for="fLoopKm">Distance</label>
   <div class="kmrow">
     <input id="fLoopKm" type="range" min="20" max="400" step="5">
@@ -391,7 +400,7 @@ var routeLayer = L.layerGroup().addTo(map);
 var wpLayer = L.layerGroup().addTo(map);
 var fuelLayer = L.layerGroup().addTo(map);
 var tracksLayer = L.layerGroup();
-var meMarker = null;
+var meMarker = null, meCircle = null, pickingStart = false;
 
 /* ---------- Interface ---------- */
 var $ = function (id) { return document.getElementById(id); };
@@ -470,6 +479,7 @@ function changed() {
 }
 map.on('click', function (e) {
   if (!layersEl.hidden) { layersEl.hidden = true; return; }
+  if (pickingStart) { setLoopStart([e.latlng.lat, e.latlng.lng]); return; }
   if (state.imported) { toast('Trace importée affichée : efface-la pour tracer un nouveau parcours'); return; }
   state.wps.push([e.latlng.lat, e.latlng.lng]);
   changed();
@@ -876,7 +886,9 @@ function openSaved(it) {
 
 /* ---------- Position ---------- */
 var lastFix = null, watchId = null, posWaiters = [];
-function showMe(ll) {
+function showMe(ll, acc) {
+  if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
+  else meCircle.setLatLng(ll).setRadius(acc || 0);
   if (!meMarker) meMarker = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false, zIndexOffset: -100 }).addTo(map);
   else meMarker.setLatLng(ll);
 }
@@ -885,7 +897,7 @@ function startWatch() {
   watchId = navigator.geolocation.watchPosition(function (pos) {
     var first = !lastFix;
     lastFix = { ll: [pos.coords.latitude, pos.coords.longitude], acc: pos.coords.accuracy, t: Date.now() };
-    showMe(lastFix.ll);
+    showMe(lastFix.ll, lastFix.acc);
     if (first && !state.wps.length && !state.imported) map.setView(lastFix.ll, 13);
     posWaiters.splice(0).forEach(function (w) { w.ok(lastFix); });
     updateLoopPos();
@@ -893,16 +905,24 @@ function startWatch() {
     if (err.code === 1) { navigator.geolocation.clearWatch(watchId); watchId = 'refus'; }
     posWaiters.splice(0).forEach(function (w) { w.ko(err); });
     updateLoopPos();
-  }, { enableHighAccuracy: true, maximumAge: 60000, timeout: 20000 });
+  }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
 }
 // Position récente, ou attente d'un premier point GPS
-function getPosition() {
-  if (lastFix && Date.now() - lastFix.t < 5 * 60000) return Promise.resolve(lastFix);
+function getPosition(maxAcc) {
+  maxAcc = maxAcc || 100000;
+  if (lastFix && Date.now() - lastFix.t < 2 * 60000 && lastFix.acc <= maxAcc) return Promise.resolve(lastFix);
   if (watchId === 'refus' || !navigator.geolocation) return Promise.reject(new Error('refus'));
   startWatch();
   return new Promise(function (ok, ko) {
-    posWaiters.push({ ok: ok, ko: ko });
-    setTimeout(function () { ko(new Error('délai')); }, 20000);
+    var done = false;
+    function check() {
+      if (done) return;
+      if (lastFix && lastFix.acc <= maxAcc) { done = true; ok(lastFix); }
+      else posWaiters.push({ ok: check, ko: function (e) { if (!done) { done = true; ko(e); } } });
+    }
+    check();
+    // Au bout de 12 s, on prend la meilleure position obtenue
+    setTimeout(function () { if (done) return; done = true; if (lastFix && Date.now() - lastFix.t < 2 * 60000) ok(lastFix); else ko(new Error('délai')); }, 12000);
   });
 }
 $('btnLocate').onclick = function () {
@@ -926,12 +946,40 @@ document.querySelectorAll('#compass button').forEach(function (b) {
   b.onclick = function () { settings.loopDir = b.dataset.dir; save('settings', settings); renderCompass(); };
 });
 renderCompass();
+settings.loopStart = settings.loopStart || 'gps';
+var loopStartPt = null, startMarker = null;
+function fmtAcc(m) { return m < 1000 ? Math.round(m) + ' m' : (m / 1000).toFixed(1).replace('.', ',') + ' km'; }
 function updateLoopPos() {
   var el = $('loopPos'); if (!el) return;
-  if (lastFix) el.textContent = 'Départ : ta position (précision ' + Math.round(lastFix.acc) + ' m).';
-  else if (watchId === 'refus' || !navigator.geolocation) el.textContent = 'Localisation refusée : la boucle partira du centre de la carte. Autorise la localisation pour Safari dans les Réglages de l\'iPhone.';
-  else el.textContent = 'Recherche de ta position…';
+  $('startGps').setAttribute('aria-pressed', String(settings.loopStart === 'gps'));
+  $('startMap').setAttribute('aria-pressed', String(settings.loopStart === 'map'));
+  if (settings.loopStart === 'map') {
+    el.innerHTML = loopStartPt ? 'Départ : le drapeau vert sur la carte. <button type="button" class="btn" id="btnRepick" style="margin-top:6px">Déplacer le départ</button>'
+      : 'Touche « Point sur la carte » puis la carte pour placer le départ.';
+    var rp = document.getElementById('btnRepick'); if (rp) rp.onclick = beginPick;
+    return;
+  }
+  if (lastFix) {
+    el.textContent = lastFix.acc > 500
+      ? 'Position approximative (± ' + fmtAcc(lastFix.acc) + '). Active « Position exacte » pour Safari, ou place le départ sur la carte.'
+      : 'Départ : ta position, précise à ' + fmtAcc(lastFix.acc) + ' (point bleu sur la carte).';
+  } else if (watchId === 'refus' || !navigator.geolocation) {
+    el.textContent = 'Localisation refusée. Autorise-la (Réglages → Confidentialité → Service de localisation → Sites web Safari) ou place le départ sur la carte.';
+  } else el.textContent = 'Recherche de ta position…';
 }
+function beginPick() {
+  pickingStart = true; $('loopPanel').hidden = true;
+  $('hint').textContent = 'Touche la carte pour placer le départ de la boucle'; $('hint').hidden = false;
+}
+function setLoopStart(ll) {
+  pickingStart = false; loopStartPt = ll;
+  if (!startMarker) startMarker = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div class="flag"></div>', iconSize: [30, 30], iconAnchor: [15, 30] }), interactive: false }).addTo(map);
+  else startMarker.setLatLng(ll);
+  renderWps(); // rétablit le message d'aide normal
+  $('loopPanel').hidden = false; updateLoopPos();
+}
+$('startGps').onclick = function () { settings.loopStart = 'gps'; save('settings', settings); startWatch(); updateLoopPos(); };
+$('startMap').onclick = function () { settings.loopStart = 'map'; save('settings', settings); beginPick(); };
 $('btnAutoLoop').onclick = function () {
   $('loopPanel').hidden = false; $('loopResult').innerHTML = ''; $('btnLoopAgain').hidden = true;
   startWatch(); updateLoopPos();
@@ -951,12 +999,12 @@ function makeLoop() {
   var bearing = dir === '?' ? rnd() * 360 : C.BEARINGS[dir] + (rnd() - 0.5) * 30;
   var n = target > 150000 ? 6 : 5;
   var radius = C.loopRadius(target, n, state.level);
-  var best = null, startPt = null, fromGps = true;
+  var best = null, startPt = null, fromGps = settings.loopStart === 'gps';
 
-  getPosition().then(function (f) { return f.ll; }, function () {
-    fromGps = false;
-    var c = map.getCenter(); return [c.lat, c.lng];
-  }).then(function (start) {
+  var startP = fromGps
+    ? getPosition(150).then(function (f) { return f.ll; }, function () { throw new Error('NOPOS'); })
+    : (loopStartPt ? Promise.resolve(loopStartPt) : Promise.reject(new Error('NOSTART')));
+  startP.then(function (start) {
     startPt = start;
     var attempt = 0;
     function step() {
@@ -993,10 +1041,12 @@ function makeLoop() {
     $('loopResult').innerHTML = '<div class="okmsg">Boucle de ' + km + ' km' + (dir === '?' ? '' : ' vers ' + DIR_NAMES[dir]) +
       (share == null ? '' : ', ' + Math.round(share * 100) + ' % de chemins') + '.' +
       (Math.abs(best.route.length - target) / target > 0.15 ? ' Le réseau de chemins ne permet pas d\'approcher davantage les ' + settings.loopKm + ' km ici.' : '') +
-      (fromGps ? '' : ' Départ au centre de la carte.') + ' Tu peux déplacer les points sur la carte.</div>';
+      (fromGps ? ' Départ depuis ta position (± ' + fmtAcc(lastFix.acc) + ').' : ' Départ depuis le drapeau.') + ' Tu peux déplacer les points sur la carte.</div>';
     $('btnLoopAgain').hidden = false;
   }).catch(function (e) {
-    $('loopResult').innerHTML = '<div class="alert">' + routeError(e) + '</div>';
+    var msg = e.message === 'NOPOS' ? 'Position introuvable. Vérifie que la localisation est autorisée pour Safari, ou choisis « Point sur la carte ».'
+      : e.message === 'NOSTART' ? 'Place d\'abord le départ sur la carte.' : routeError(e);
+    $('loopResult').innerHTML = '<div class="alert">' + msg + '</div>';
   }).then(function () {
     loopBusy = false; busy(false);
     btns.forEach(function (b) { b.disabled = false; });
