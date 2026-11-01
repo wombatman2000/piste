@@ -885,7 +885,8 @@ function openSaved(it) {
 }
 
 /* ---------- Position ---------- */
-var lastFix = null, watchId = null, posWaiters = [];
+var lastFix = null, watchId = null, posWaiters = [], lastGeoErr = null;
+var APP_VERSION = '5';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
@@ -902,6 +903,7 @@ function startWatch() {
     posWaiters.splice(0).forEach(function (w) { w.ok(lastFix); });
     updateLoopPos();
   }, function (err) {
+    lastGeoErr = err;
     if (err.code === 1) { navigator.geolocation.clearWatch(watchId); watchId = 'refus'; }
     posWaiters.splice(0).forEach(function (w) { w.ko(err); });
     updateLoopPos();
@@ -927,6 +929,11 @@ function getPosition(maxAcc) {
 }
 $('btnLocate').onclick = function () {
   busy(true);
+  if (watchId === 'refus') watchId = null; // nouvelle demande d'autorisation
+  if (navigator.geolocation) navigator.geolocation.getCurrentPosition(function (pos) {
+    lastFix = { ll: [pos.coords.latitude, pos.coords.longitude], acc: pos.coords.accuracy, t: Date.now() };
+    showMe(lastFix.ll, lastFix.acc); updateLoopPos(); startWatch();
+  }, function (e) { lastGeoErr = e; updateLoopPos(); }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 });
   getPosition().then(function (f) { map.setView(f.ll, Math.max(map.getZoom(), 14)); })
     .catch(function () { toast('Position refusée ou introuvable. Autorise la localisation pour Safari dans Réglages → Confidentialité.', 5000); })
     .then(function () { busy(false); });
@@ -965,7 +972,11 @@ function updateLoopPos() {
       : 'Départ : ta position, précise à ' + fmtAcc(lastFix.acc) + ' (point bleu sur la carte).';
   } else if (watchId === 'refus' || !navigator.geolocation) {
     el.textContent = 'Localisation refusée. Autorise-la (Réglages → Confidentialité → Service de localisation → Sites web Safari) ou place le départ sur la carte.';
+  } else if (lastGeoErr) {
+    el.textContent = (lastGeoErr.code === 3 ? 'Le GPS ne répond pas encore' : 'Position indisponible') + ' (code ' + lastGeoErr.code + '). Réessaie dehors ou place le départ sur la carte.';
   } else el.textContent = 'Recherche de ta position…';
+  el.appendChild(document.createElement('br'));
+  var v = document.createElement('small'); v.textContent = 'Version ' + APP_VERSION + (navigator.geolocation ? '' : ' · localisation non prise en charge'); el.appendChild(v);
 }
 function beginPick() {
   pickingStart = true; $('loopPanel').hidden = true;
@@ -978,7 +989,7 @@ function setLoopStart(ll) {
   renderWps(); // rétablit le message d'aide normal
   $('loopPanel').hidden = false; updateLoopPos();
 }
-$('startGps').onclick = function () { settings.loopStart = 'gps'; save('settings', settings); startWatch(); updateLoopPos(); };
+$('startGps').onclick = function () { settings.loopStart = 'gps'; save('settings', settings); if (watchId === 'refus') watchId = null; startWatch(); updateLoopPos(); };
 $('startMap').onclick = function () { settings.loopStart = 'map'; save('settings', settings); beginPick(); };
 $('btnAutoLoop').onclick = function () {
   $('loopPanel').hidden = false; $('loopResult').innerHTML = ''; $('btnLoopAgain').hidden = true;
