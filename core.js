@@ -70,15 +70,21 @@
       segs.push({ to: acc, cls: surfaceClass(tags), tags: tags });
     }
     var total = parseFloat(props['track-length']) || acc;
-    return finish(coords, segs, total, parseFloat(props['filtered ascend']));
+    var r = finish(coords, segs, total, parseFloat(props['filtered ascend']));
+    r.hints = (props.voicehints || []).map(function (h) {
+      return { idx: h[0], cmd: h[1], exit: h[2], angle: h[4] };
+    }).filter(function (h) { return h.idx > 0 && h.idx < coords.length; });
+    return r;
   }
 
   // Assemble plusieurs réponses BRouter (une par étape) en une seule
   function mergeBrouter(jsons) {
     if (jsons.length === 1) return jsons[0];
-    var coords = [], msgs = null, len = 0, asc = 0;
+    var coords = [], msgs = null, len = 0, asc = 0, hints = [];
     jsons.forEach(function (j, k) {
       var f = j.features[0], c = f.geometry.coordinates, p = f.properties || {};
+      var off = k === 0 ? 0 : coords.length - 1;
+      (p.voicehints || []).forEach(function (h) { var x = h.slice(); x[0] += off; hints.push(x); });
       coords = coords.concat(k === 0 ? c : c.slice(1));
       len += parseFloat(p['track-length']) || 0;
       asc += parseFloat(p['filtered ascend']) || 0;
@@ -86,7 +92,7 @@
       if (!msgs) msgs = m.slice(); else msgs = msgs.concat(m.slice(1));
     });
     return { type: 'FeatureCollection', features: [{ type: 'Feature',
-      properties: { 'track-length': String(len), 'filtered ascend': String(asc), messages: msgs || [] },
+      properties: { 'track-length': String(len), 'filtered ascend': String(asc), messages: msgs || [], voicehints: hints },
       geometry: { type: 'LineString', coordinates: coords } }] };
   }
 
@@ -256,8 +262,8 @@
   var DETOUR = { 1: 1.25, 2: 1.4, 3: 1.65 };
 
   // Rayon du cercle pour viser distM (polygone à n côtés, départ compris)
-  function loopRadius(distM, n, level) {
-    return distM / (2 * n * Math.sin(Math.PI / n) * (DETOUR[level] || 1.35));
+  function loopRadius(distM, n, level, factor) {
+    return distM / (2 * n * Math.sin(Math.PI / n) * (factor || DETOUR[level] || 1.35));
   }
 
   // Points de passage d'une boucle : départ, n-1 points sur un cercle décalé vers bearing, retour au départ
@@ -312,8 +318,133 @@
     });
   }
 
+
+  /* ---------- Navigation ---------- */
+
+  function bearingTo(a, b) {
+    var la1 = rad(a[0]), la2 = rad(b[0]), dl = rad(b[1] - a[1]);
+    var y = Math.sin(dl) * Math.cos(la2), x = Math.cos(la1) * Math.sin(la2) - Math.sin(la1) * Math.cos(la2) * Math.cos(dl);
+    return (Math.atan2(y, x) * 180 / Math.PI + 360) % 360;
+  }
+  function angleDiff(a, b) { var d = ((b - a + 540) % 360) - 180; return d; }
+
+  // Point du parcours situé à la distance d (m) depuis le départ
+  function pointAt(r, d) {
+    var c = r.coords, cum = r.cum;
+    if (d <= 0) return c[0];
+    if (d >= r.length) return c[c.length - 1];
+    var lo = 0, hi = cum.length - 1;
+    while (hi - lo > 1) { var m = (lo + hi) >> 1; if (cum[m] <= d) lo = m; else hi = m; }
+    var seg = cum[hi] - cum[lo] || 1, t = (d - cum[lo]) / seg;
+    return [c[lo][0] + (c[hi][0] - c[lo][0]) * t, c[lo][1] + (c[hi][1] - c[lo][1]) * t];
+  }
+
+  // Projection d'un point sur un segment (approximation plane locale, précise à quelques m)
+  function projSeg(p, a, b) {
+    var k = Math.cos(rad(p[0])), ax = a[1] * k, ay = a[0], bx = b[1] * k, by = b[0], px = p[1] * k, py = p[0];
+    var dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy;
+    var t = L ? Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / L)) : 0;
+    var q = [ay + dy * t, (ax + dx * t) / k];
+    return { t: t, q: q, d: haversine(p, q) };
+  }
+
+  // Position sur le parcours, recherchée entre fromM et toM (m depuis le départ)
+  function project(r, p, fromM, toM) {
+    var c = r.coords, cum = r.cum, best = null;
+    for (var i = 0; i < c.length - 1; i++) {
+      if (cum[i + 1] < fromM) continue;
+      if (cum[i] > toM) break;
+      var pr = projSeg(p, c[i], c[i + 1]);
+      if (!best || pr.d < best.off) best = { off: pr.d, at: cum[i] + (cum[i + 1] - cum[i]) * pr.t, seg: i, q: pr.q };
+    }
+    return best;
+  }
+
+  // Suivi : garde une progression cohérente (utile pour les boucles où départ = arrivée)
+  function track(r, p, lastAt) {
+    var near = project(r, p, Math.max(0, lastAt - 150), lastAt + 2500);
+    if (near && near.off < 45) return near;
+    var all = project(r, p, 0, Infinity);
+    if (all && all.off < 35) {
+      var jumpsToEnd = lastAt < 1500 && all.at > r.length - 3000;
+      if (!jumpsToEnd) return all;
+    }
+    return near || all;
+  }
+
+  var CMD = { 1: 'straight', 2: 'left', 3: 'slight-left', 4: 'sharp-left', 5: 'right', 6: 'slight-right', 7: 'sharp-right',
+    8: 'keep-left', 9: 'keep-right', 10: 'uturn', 11: 'uturn', 13: 'roundabout', 14: 'roundabout', 15: 'uturn', 17: 'exit-left', 18: 'exit-right' };
+  var TEXT = { 'straight': 'Continuez tout droit', 'left': 'Tournez à gauche', 'slight-left': 'Prenez légèrement à gauche',
+    'sharp-left': 'Tournez franchement à gauche', 'right': 'Tournez à droite', 'slight-right': 'Prenez légèrement à droite',
+    'sharp-right': 'Tournez franchement à droite', 'keep-left': 'Serrez à gauche', 'keep-right': 'Serrez à droite',
+    'uturn': 'Faites demi-tour', 'exit-left': 'Prenez la sortie à gauche', 'exit-right': 'Prenez la sortie à droite', 'arrive': 'Vous êtes arrivé' };
+  var ORD = ['', 'première', 'deuxième', 'troisième', 'quatrième', 'cinquième', 'sixième'];
+
+  function instrText(ins) {
+    if (ins.type === 'roundabout') return 'Au rond-point, prenez la ' + (ORD[ins.exit] || ins.exit + 'e') + ' sortie';
+    return TEXT[ins.type] || 'Continuez';
+  }
+
+  // Consignes à partir des indications BRouter, sinon d'après la géométrie
+  function buildInstructions(r) {
+    var out = [];
+    if (r.hints && r.hints.length) {
+      r.hints.forEach(function (h) {
+        var type = CMD[h.cmd]; if (!type || type === 'straight') return;
+        out.push({ at: r.cum[h.idx], type: type, exit: h.exit });
+      });
+    } else {
+      out = geomTurns(r);
+    }
+    out.sort(function (a, b) { return a.at - b.at; });
+    out.push({ at: r.length, type: 'arrive' });
+    return out;
+  }
+
+  // Virages déduits de la trace (traces GPX importées) : cap mesuré 30 m avant et après
+  function geomTurns(r) {
+    var out = [], lastAt = -Infinity, step = 30;
+    for (var d = step; d < r.length - step; d += 10) {
+      var a = pointAt(r, d - step), m = pointAt(r, d), b = pointAt(r, d + step);
+      var diff = angleDiff(bearingTo(a, m), bearingTo(m, b));
+      var ad = Math.abs(diff);
+      if (ad < 40 || d - lastAt < 80) continue;
+      var side = diff < 0 ? 'left' : 'right';
+      var type = ad > 150 ? 'uturn' : ad > 110 ? 'sharp-' + side : ad > 60 ? side : 'slight-' + side;
+      out.push({ at: d, type: type });
+      lastAt = d;
+    }
+    return out;
+  }
+
+  // Annonce vocale arrondie
+  function sayDist(m) {
+    if (m < 1000) { var r = m < 100 ? 10 : 50; return Math.max(r, Math.round(m / r) * r) + ' mètres'; }
+    var km = Math.round(m / 100) / 10; return String(km).replace('.', ',') + ' kilomètre' + (km >= 2 ? 's' : '');
+  }
+
+  // Tuiles (x, y) couvrant un couloir autour du parcours
+  function lon2x(lon, z) { return Math.floor((lon + 180) / 360 * Math.pow(2, z)); }
+  function lat2y(lat, z) { var l = rad(lat); return Math.floor((1 - Math.log(Math.tan(l) + 1 / Math.cos(l)) / Math.PI) / 2 * Math.pow(2, z)); }
+  function corridorTiles(r, zooms, widthM) {
+    var tiles = {}, list = [];
+    for (var d = 0; d <= r.length; d += Math.max(50, widthM / 2)) {
+      var p = pointAt(r, d);
+      var n = destination(p, 0, widthM), s = destination(p, 180, widthM), e = destination(p, 90, widthM), w = destination(p, 270, widthM);
+      zooms.forEach(function (z) {
+        for (var x = lon2x(w[1], z); x <= lon2x(e[1], z); x++)
+          for (var y = lat2y(n[0], z); y <= lat2y(s[0], z); y++) {
+            var k = z + '/' + x + '/' + y;
+            if (!tiles[k]) { tiles[k] = 1; list.push({ z: z, x: x, y: y }); }
+          }
+      });
+    }
+    return list;
+  }
+
   var api = {
-    mergeBrouter: mergeBrouter, snapToTracks: snapToTracks, destination: destination, loopRadius: loopRadius, loopWaypoints: loopWaypoints, BEARINGS: BEARINGS,
+    mergeBrouter: mergeBrouter, bearingTo: bearingTo, angleDiff: angleDiff, pointAt: pointAt, project: project, track: track,
+    buildInstructions: buildInstructions, geomTurns: geomTurns, instrText: instrText, sayDist: sayDist, corridorTiles: corridorTiles, snapToTracks: snapToTracks, destination: destination, loopRadius: loopRadius, loopWaypoints: loopWaypoints, BEARINGS: BEARINGS,
     haversine: haversine, cumulative: cumulative, parseTags: parseTags, surfaceClass: surfaceClass,
     parseBrouter: parseBrouter, fromCoords: fromCoords, computeAscend: computeAscend,
     unpavedShare: unpavedShare, estimateHours: estimateHours, sample: sample,

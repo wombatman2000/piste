@@ -128,6 +128,7 @@ button { cursor: pointer; }
 }
 .btn svg { width: 17px; height: 17px; }
 .btn:disabled { opacity: .45; cursor: default; }
+.btn.primary svg { width: 18px; height: 18px; }
 .btn.primary {
   background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font: 700 17px/1.1 var(--display);
   letter-spacing: .06em; text-transform: uppercase; justify-content: center; flex: 1; padding: 12px;
@@ -181,6 +182,30 @@ h2 { font: 700 15px/1.2 var(--display); letter-spacing: .12em; text-transform: u
 .panel { position: fixed; inset: auto 0 0 0; max-height: 85vh; z-index: 2000; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 30px rgba(0,0,0,.3); }
 @media (min-width: 900px) { .panel { left: 0; right: auto; width: 400px; } }
 .btn.secondary { flex: 1; justify-content: center; font-weight: 600; }
+body.navmode { grid-template-rows: 1fr; grid-template-columns: 1fr; }
+body.navmode .bar, body.navmode #sheet, body.navmode .fabs, body.navmode .hint, body.navmode .legend { display: none !important; }
+body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
+.nav { position: fixed; inset: 0; z-index: 1500; pointer-events: none; display: flex; flex-direction: column; justify-content: space-between; }
+.nav > * { pointer-events: auto; }
+.nav-top { background: var(--moss); color: var(--moss-ink); display: flex; gap: 14px; align-items: center;
+  padding: calc(env(safe-area-inset-top, 0px) + 12px) max(16px, env(safe-area-inset-right, 0px)) 14px max(16px, env(safe-area-inset-left, 0px)); box-shadow: 0 4px 16px rgba(0,0,0,.3); }
+.nav-arrow { width: 64px; height: 64px; flex: none; display: grid; place-items: center; background: var(--accent); color: var(--accent-ink); border-radius: 14px; }
+.nav-arrow svg { width: 44px; height: 44px; }
+.nav-main { min-width: 0; display: grid; }
+.nav-main b { font: 700 38px/1 var(--display); font-variant-numeric: tabular-nums; }
+.nav-main span { font: 600 19px/1.2 var(--body); }
+.nav-main small { opacity: .75; font-size: 14px; }
+.nav-off { margin: 10px auto 0; background: var(--warn); color: #fff; padding: 9px 14px; border-radius: 10px; font-weight: 600; max-width: calc(100% - 32px); text-align: center; }
+.nav-bottom { background: var(--panel); border-top: 1px solid var(--line); display: flex; align-items: center; gap: 8px;
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 10px) max(16px, env(safe-area-inset-left, 0px)); box-shadow: 0 -4px 16px rgba(0,0,0,.2); }
+.nav-bottom .stat { flex: 1; min-width: 0; }
+.nav-bottom .stat b { font-size: 24px; }
+.nav-btn { width: 46px; height: 46px; border-radius: 12px; border: 1px solid var(--line); background: var(--bg); display: grid; place-items: center; flex: none; }
+.nav-btn svg { width: 22px; height: 22px; }
+.nav-btn[aria-pressed="false"] { opacity: .5; }
+.nav-btn.stop { background: var(--warn); color: #fff; border-color: var(--warn); }
+.navme { width: 34px; height: 34px; display: grid; place-items: center; }
+.navme svg { width: 34px; height: 34px; filter: drop-shadow(0 1px 3px rgba(0,0,0,.5)); transition: transform .3s; }
 .me { width: 16px; height: 16px; border-radius: 50%; background: #2f7de1; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(47,125,225,.25); }
 .leaflet-popup-content { font: 14px/1.4 var(--body); }
 .leaflet-popup-content button { margin-top: 6px; }
@@ -239,7 +264,11 @@ h2 { font: 700 15px/1.2 var(--display); letter-spacing: .12em; text-transform: u
   </div>
   <div class="row">
     <button class="btn secondary" id="btnAutoLoop" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/><path d="m12 9 2 5-2-1-2 1z" fill="currentColor"/></svg>Créer une boucle</button>
-    <button class="btn primary" id="btnSend" type="button">Envoyer à OsmAnd</button>
+    <button class="btn primary" id="btnNav" type="button"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4.5 20.3l.7.7L12 18l6.8 3 .7-.7z"/></svg>Naviguer</button>
+  </div>
+  <div class="row">
+    <button class="btn" id="btnOffline" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3v12M7 10l5 5 5-5"/><path d="M4 17v3h16v-3"/></svg><span>Carte hors ligne</span></button>
+    <button class="btn" id="btnSend" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15V3M7 8l5-5 5 5"/><path d="M5 12v8h14v-8"/></svg>Envoyer à OsmAnd</button>
   </div>
 
   <h2>Profil d'altitude</h2>
@@ -334,6 +363,24 @@ h2 { font: 700 15px/1.2 var(--display); letter-spacing: .12em; text-transform: u
     <button class="btn" id="btnLoopAgain" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>Autre variante</button>
     <button class="btn primary" id="btnMakeLoop" type="button">Créer la boucle</button>
     <button class="btn primary" id="btnCancelLoop" type="button" hidden>Annuler le calcul</button>
+  </div>
+</div>
+
+<div class="nav" id="nav" hidden>
+  <div>
+    <div class="nav-top">
+      <div class="nav-arrow" id="navArrow"></div>
+      <div class="nav-main"><b id="navDist">–</b><span id="navText">Rejoins le parcours</span><small id="navThen"></small></div>
+    </div>
+    <div class="nav-off" id="navOff" hidden></div>
+  </div>
+  <div class="nav-bottom">
+    <div class="stat"><b id="navLeft">–</b><small>km restants</small></div>
+    <div class="stat"><b id="navEta">–</b><small>arrivée</small></div>
+    <div class="stat"><b id="navSpeed">–</b><small>km/h</small></div>
+    <button class="nav-btn" id="navVoice" type="button" aria-pressed="true" aria-label="Voix"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 9v6h4l5 4V5L8 9z"/><path d="M16 9a4 4 0 0 1 0 6M19 6a8 8 0 0 1 0 12"/></svg></button>
+    <button class="nav-btn" id="navCenter" type="button" aria-label="Recentrer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></button>
+    <button class="nav-btn stop" id="navStop" type="button" aria-label="Arrêter la navigation"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
   </div>
 </div>
 
@@ -559,7 +606,7 @@ function getProfile() {
 }
 function routeUrl(wps, profile, extra) {
   var ll = wps.map(function (p) { return p[1].toFixed(6) + ',' + p[0].toFixed(6); }).join('|');
-  return BROUTER + '?lonlats=' + ll + '&profile=' + encodeURIComponent(profile) + '&alternativeidx=0&format=geojson' + (extra || '');
+  return BROUTER + '?lonlats=' + ll + '&profile=' + encodeURIComponent(profile) + '&alternativeidx=0&format=geojson&timode=2' + (extra || '');
 }
 function fetchRoute(wps, profile, extra) {
   return fetchT(routeUrl(wps, profile, extra), {}, 75000).then(function (r) {
@@ -650,7 +697,7 @@ function renderStats() {
       s.title = LABELS[k] + ' : ' + (r.mix[k] / 1000).toFixed(1) + ' km'; mix.appendChild(s);
     });
   }
-  $('btnSend').disabled = !r;
+  $('btnSend').disabled = !r; $('btnNav').disabled = !r; $('btnOffline').disabled = !r;
   drawChart();
 }
 
@@ -905,7 +952,7 @@ function openSaved(it) {
 
 /* ---------- Position ---------- */
 var lastFix = null, watchId = null, posWaiters = [], lastGeoErr = null;
-var APP_VERSION = '7';
+var APP_VERSION = '9';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
@@ -921,6 +968,7 @@ function startWatch() {
     if (first && !state.wps.length && !state.imported) map.setView(lastFix.ll, 13);
     posWaiters.splice(0).forEach(function (w) { w.ok(lastFix); });
     updateLoopPos();
+    if (nav) navOnFix(pos);
   }, function (err) {
     lastGeoErr = err;
     if (err.code === 1) { navigator.geolocation.clearWatch(watchId); watchId = 'refus'; }
@@ -1013,6 +1061,7 @@ $('startMap').onclick = function () { settings.loopStart = 'map'; save('settings
 $('btnAutoLoop').onclick = function () {
   $('loopPanel').hidden = false; $('loopResult').innerHTML = ''; $('btnLoopAgain').hidden = true;
   startWatch(); updateLoopPos();
+  getProfile().catch(function () {}); // prépare le profil pendant le réglage
 };
 $('btnCloseLoop').onclick = function () { $('loopPanel').hidden = true; };
 $('btnMakeLoop').onclick = function () { loopSeed = Math.floor(Math.random() * 1e9) + 1; makeLoop(); };
@@ -1025,9 +1074,10 @@ function snapLoop(wps, radius) {
   var R = Math.round(Math.min(2500, Math.max(800, radius * 0.3)));
   var q = '[out:json][timeout:25];(' + wps.slice(1, -1).map(function (p) {
     var a = '(around:' + R + ',' + p[0].toFixed(5) + ',' + p[1].toFixed(5) + ')';
-    return 'way["highway"="track"]' + a + ';way["highway"~"^(unclassified|road)$"]["surface"~"^(unpaved|gravel|fine_gravel|compacted|ground|dirt|earth|grass|sand|pebblestone)$"]' + a + ';';
-  }).join('') + ');out body geom;';
-  return overpass(q).then(function (j) {
+    return 'way["highway"="track"]' + a + ';';
+  }).join('') + ');out body geom qt;';
+  return fetchT(OVERPASS[0], { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, 9000)
+    .then(function (resp) { if (!resp.ok) throw new Error('Overpass ' + resp.status); return resp.json(); }).then(function (j) {
     var ways = (j.elements || []).filter(function (w) { return w.geometry; }).map(function (w) {
       return { id: w.id, tags: w.tags || {}, coords: w.geometry.map(function (g) { return [g.lat, g.lon]; }) };
     });
@@ -1048,7 +1098,8 @@ function makeLoop() {
   var rnd = (function (x) { return function () { x = (x * 16807) % 2147483647; return x / 2147483647; }; })(seed % 2147483646 + 1);
   var bearing = dir === '?' ? rnd() * 360 : C.BEARINGS[dir] + (rnd() - 0.5) * 30;
   var n = target > 150000 ? 6 : 5;
-  var radius = C.loopRadius(target, n, state.level);
+  settings.detour = settings.detour || {};
+  var radius = C.loopRadius(target, n, state.level, settings.detour[state.level]);
   var best = null, startPt = null, fromGps = settings.loopStart === 'gps';
 
   var startP = fromGps
@@ -1060,17 +1111,23 @@ function makeLoop() {
     function step() {
       if (loopCancelled) throw new Error('CANCELLED');
       var raw = C.loopWaypoints(start, bearing, radius, n, seed + attempt * 101);
-      progress('Recherche des chemins (essai ' + (attempt + 1) + '/3)');
+      progress('Recherche des chemins' + (attempt ? ' (ajustement ' + attempt + ')' : ''));
       return snapLoop(raw, radius).then(function (wps) {
         if (loopCancelled) throw new Error('CANCELLED');
-        progress('Calcul du parcours (essai ' + (attempt + 1) + '/3)');
+        progress('Calcul du parcours' + (attempt ? ' (ajustement ' + attempt + ')' : ''));
         return routeFor(wps).then(function (r) { return { wps: wps, r: r }; });
       }).then(function (res) {
         var wps = res.wps, r = res.r;
         var err = Math.abs(r.length - target) / target;
         if (!best || err < best.err) best = { wps: wps, route: r, err: err };
         attempt++;
-        if (err < 0.12 || attempt >= 3) return;
+        // apprend le rapport distance roulée / distance à vol d'oiseau pour viser juste du premier coup
+        var geo = 0; for (var g = 1; g < wps.length; g++) geo += C.haversine(wps[g - 1], wps[g]);
+        if (geo > 0) {
+          var ratio = Math.min(3, Math.max(1.05, r.length / geo)), old = settings.detour[state.level];
+          settings.detour[state.level] = old ? old * 0.6 + ratio * 0.4 : ratio; save('settings', settings);
+        }
+        if (err < 0.15 || attempt >= 3) return;
         radius *= Math.min(1.6, Math.max(0.6, target / r.length));
         return step();
       }, function (e) {
@@ -1112,6 +1169,188 @@ function makeLoop() {
     btns.forEach(function (b) { b.disabled = false; });
   });
 }
+
+
+/* ---------- Navigation ---------- */
+var nav = null, navMarker = null, rejoinLayer = L.layerGroup().addTo(map), wakeLock = null;
+settings.voice = settings.voice !== false;
+var ARROWS = {
+  'left': 'M15 19V11a2 2 0 0 0-2-2H6M9 5 5 9l4 4', 'right': 'M9 19V11a2 2 0 0 1 2-2h7M15 5l4 4-4 4',
+  'slight-left': 'M14 20v-7l-6-6M8 12V7h5', 'slight-right': 'M10 20v-7l6-6M16 12V7h-5',
+  'sharp-left': 'M16 4v9a3 3 0 0 1-6 0V8M6 12l4-4 4 4', 'sharp-right': 'M8 4v9a3 3 0 0 0 6 0V8M10 12l4-4 4 4',
+  'keep-left': 'M8 20V9M5 12l3-3 3 3M16 20v-6l-8-5', 'keep-right': 'M16 20V9M13 12l3-3 3 3M8 20v-6l8-5',
+  'exit-left': 'M14 20V10L8 4M8 9V4h5', 'exit-right': 'M10 20V10l6-6M16 9V4h-5',
+  'uturn': 'M8 20V9a4 4 0 0 1 8 0v4M12 10l4 4 4-4', 'roundabout': 'M12 20v-5M12 15a3.5 3.5 0 1 0-3-5.2M9 5v5h5',
+  'straight': 'M12 20V5M7 10l5-5 5 5', 'arrive': 'M6 21V4M6 4h11l-2 4 2 4H6', 'off': 'M12 3l9 16H3zM12 9v4M12 16v.5'
+};
+function arrowSvg(t) { return '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="' + (ARROWS[t] || ARROWS.straight) + '"/></svg>'; }
+function fmtDist(m) { return m < 1000 ? (Math.round(m / 10) * 10) + ' m' : (m / 1000).toFixed(m < 10000 ? 1 : 0).replace('.', ',') + ' km'; }
+function speak(txt, force) {
+  if (!settings.voice && !force) return;
+  try {
+    var u = new SpeechSynthesisUtterance(txt); u.lang = 'fr-FR'; u.rate = 1.05;
+    var v = speechSynthesis.getVoices().find(function (x) { return /^fr/i.test(x.lang); }); if (v) u.voice = v;
+    speechSynthesis.cancel(); speechSynthesis.speak(u);
+  } catch (e) {}
+}
+function keepAwake() {
+  if (!('wakeLock' in navigator)) return Promise.resolve(false);
+  return navigator.wakeLock.request('screen').then(function (l) { wakeLock = l; return true; }).catch(function () { return false; });
+}
+document.addEventListener('visibilitychange', function () { if (nav && !document.hidden) keepAwake(); });
+
+function startNav() {
+  var r = state.route; if (!r) return;
+  speak('Navigation démarrée', true); // débloque la voix sur iPhone (geste de l'utilisateur)
+  nav = { base: r, route: r, ins: C.buildInstructions(r), at: 0, off: 0, offSince: 0, said: {}, follow: true,
+    lastP: null, heading: 0, rerouting: false, lastReroute: 0, started: Date.now(), estH: C.estimateHours(r, settings.vRoute, settings.vTT) };
+  document.body.classList.add('navmode'); $('nav').hidden = false; $('loopPanel').hidden = true; $('settings').hidden = true;
+  setTimeout(function () { map.invalidateSize(); }, 50);
+  if (settings.base !== 'ign' && settings.offlineReady) setBase('ign');
+  keepAwake().then(function (ok) { if (!ok) toast('Garde l\'écran allumé : Réglages → Luminosité et affichage → Verrouillage automatique', 6000); });
+  $('navVoice').setAttribute('aria-pressed', String(settings.voice));
+  if (watchId === 'refus') watchId = null;
+  startWatch();
+  if (lastFix) navOnFix({ coords: { latitude: lastFix.ll[0], longitude: lastFix.ll[1], accuracy: lastFix.acc, speed: null, heading: null } });
+  else { $('navText').textContent = 'Recherche du GPS…'; $('navDist').textContent = '–'; $('navArrow').innerHTML = arrowSvg('straight'); }
+  map.setZoom(16);
+}
+function stopNav() {
+  nav = null; rejoinLayer.clearLayers();
+  if (navMarker) { map.removeLayer(navMarker); navMarker = null; }
+  if (wakeLock) { try { wakeLock.release(); } catch (e) {} wakeLock = null; }
+  try { speechSynthesis.cancel(); } catch (e) {}
+  document.body.classList.remove('navmode'); $('nav').hidden = true;
+  setTimeout(function () { map.invalidateSize(); }, 50);
+}
+$('btnNav').onclick = startNav;
+var stopArmed = false;
+$('navStop').onclick = function () {
+  if (!stopArmed) { stopArmed = true; toast('Touche encore pour arrêter la navigation', 2500); setTimeout(function () { stopArmed = false; }, 2500); return; }
+  stopArmed = false; stopNav();
+};
+$('navVoice').onclick = function () { settings.voice = !settings.voice; save('settings', settings); this.setAttribute('aria-pressed', String(settings.voice)); if (settings.voice) speak('Voix activée'); };
+$('navCenter').onclick = function () { if (!nav) return; nav.follow = true; if (nav.lastP) map.setView(nav.lastP, Math.max(map.getZoom(), 15)); };
+map.on('dragstart', function () { if (nav) nav.follow = false; });
+
+function navOnFix(pos) {
+  var p = [pos.coords.latitude, pos.coords.longitude], acc = pos.coords.accuracy || 50, now = Date.now();
+  // vitesse et cap
+  var v = pos.coords.speed;
+  if (nav.lastP && nav.lastT) {
+    var moved = C.haversine(nav.lastP, p), dt = (now - nav.lastT) / 1000;
+    if ((v == null || isNaN(v)) && dt > 0) v = moved / dt;
+    if (moved > 4) nav.heading = (pos.coords.heading != null && !isNaN(pos.coords.heading) && pos.coords.heading >= 0) ? pos.coords.heading : C.bearingTo(nav.lastP, p);
+  }
+  nav.lastP = p; nav.lastT = now; v = v || 0;
+  // marqueur
+  var icon = L.divIcon({ className: '', html: '<div class="navme"><svg viewBox="0 0 24 24" style="transform:rotate(' + Math.round(nav.heading) + 'deg)"><path d="M12 2 4.5 20.3l.7.7L12 18l6.8 3 .7-.7z" fill="#2f7de1" stroke="#fff" stroke-width="1.6"/></svg></div>', iconSize: [34, 34], iconAnchor: [17, 17] });
+  if (!navMarker) navMarker = L.marker(p, { icon: icon, interactive: false, zIndexOffset: 1000 }).addTo(map);
+  else { navMarker.setLatLng(p); navMarker.setIcon(icon); }
+  if (nav.follow) map.panTo(p, { animate: true, duration: 0.5 });
+  $('navSpeed').textContent = Math.round(v * 3.6);
+
+  var r = nav.route, m = C.track(r, p, nav.at), limit = Math.max(45, Math.min(120, acc * 1.5));
+  if (m && m.off <= limit) {
+    nav.at = m.at; nav.off = 0; nav.offSince = 0; $('navOff').hidden = true;
+  } else if (acc < 80) {
+    nav.off++; if (!nav.offSince) nav.offSince = now;
+    var near = C.project(r, p, nav.at, nav.at + 5000) || m;
+    var dist = near ? C.haversine(p, near.q) : 0;
+    var dirTxt = near ? ' · rejoins à ' + fmtDist(dist) + ' vers ' + cardinal(C.bearingTo(p, near.q)) : '';
+    $('navOff').hidden = false; $('navOff').textContent = 'Hors parcours' + (nav.rerouting ? ' · recalcul…' : dirTxt);
+    if (nav.off === 3) speak('Hors parcours');
+    if (nav.off >= 3 && now - nav.offSince > 6000 && !nav.rerouting && now - nav.lastReroute > 20000) reroute(p, near);
+  }
+  renderNav(v);
+}
+function cardinal(b) { return ['le nord', 'le nord-est', 'l\'est', 'le sud-est', 'le sud', 'le sud-ouest', 'l\'ouest', 'le nord-ouest'][Math.round(b / 45) % 8]; }
+
+function renderNav(v) {
+  var r = nav.route, at = nav.at;
+  var i = nav.ins.findIndex(function (x) { return x.at > at + 3; });
+  var ins = i >= 0 ? nav.ins[i] : nav.ins[nav.ins.length - 1];
+  var d = Math.max(0, ins.at - at), next = nav.ins[i + 1];
+  $('navArrow').innerHTML = arrowSvg(ins.type);
+  $('navDist').textContent = fmtDist(d);
+  $('navText').textContent = C.instrText(ins);
+  $('navThen').textContent = next && next.at - ins.at < 300 ? 'puis ' + C.instrText(next).toLowerCase() : '';
+  var left = Math.max(0, r.length - at);
+  $('navLeft').textContent = (left / 1000).toFixed(left < 10000 ? 1 : 0).replace('.', ',');
+  var hLeft = nav.estH * (left / nav.base.length);
+  var eta = new Date(Date.now() + hLeft * 3600000);
+  $('navEta').textContent = eta.getHours() + 'h' + String(eta.getMinutes()).padStart(2, '0');
+  // annonces vocales
+  var key = i + ':' + Math.round(ins.at), far = Math.max(250, Math.min(800, v * 20)), close = Math.min(120, Math.max(35, v * 5));
+  if (ins.type === 'arrive') {
+    if (d < 30 && !nav.said['arrive']) { nav.said['arrive'] = 1; speak('Vous êtes arrivé'); toast('Arrivée !'); }
+    else if (d < far && d > far * 0.6 && !nav.said[key + 'f']) { nav.said[key + 'f'] = 1; speak('Arrivée dans ' + C.sayDist(d)); }
+    return;
+  }
+  if (d <= close && !nav.said[key + 'n']) {
+    nav.said[key + 'n'] = 1; nav.said[key + 'f'] = 1;
+    speak(C.instrText(ins) + (next && next.at - ins.at < 150 ? ', puis ' + C.instrText(next).toLowerCase() : ''));
+  } else if (d <= far && d > close * 2 && !nav.said[key + 'f']) {
+    nav.said[key + 'f'] = 1; speak('Dans ' + C.sayDist(d) + ', ' + C.instrText(ins).toLowerCase());
+  }
+}
+
+// Recalcul : rejoint le parcours prévu un peu plus loin
+function reroute(p, near) {
+  nav.rerouting = true; nav.lastReroute = Date.now();
+  $('navOff').textContent = 'Hors parcours · recalcul…';
+  var r = nav.route, targetAt = Math.min(r.length, (near ? near.at : nav.at) + 400);
+  var target = C.pointAt(r, targetAt);
+  routeFor([p, target]).then(function (rj) {
+    if (!nav) return;
+    var rest = [], k;
+    for (k = 0; k < r.coords.length; k++) if (r.cum[k] > targetAt) rest.push(r.coords[k]);
+    var coords = rj.coords.concat(rest);
+    var nr = C.fromCoords(coords);
+    var shift = rj.length - targetAt;
+    var ins = C.buildInstructions(rj).filter(function (x) { return x.type !== 'arrive'; })
+      .concat(nav.ins.filter(function (x) { return x.at > targetAt; }).map(function (x) { return { at: x.at + shift, type: x.type, exit: x.exit }; }));
+    nav.route = nr; nav.ins = ins; nav.at = 0; nav.said = {}; nav.off = 0; nav.offSince = 0;
+    rejoinLayer.clearLayers();
+    L.polyline(rj.coords.map(function (c) { return [c[0], c[1]]; }), { color: '#2f7de1', weight: 6, opacity: .9, dashArray: '10 8' }).addTo(rejoinLayer);
+    $('navOff').hidden = true; speak('Itinéraire recalculé');
+  }).catch(function () {
+    if (nav) $('navOff').textContent = 'Hors parcours · recalcul impossible sans réseau, suis la flèche';
+  }).then(function () { if (nav) nav.rerouting = false; });
+}
+
+/* ---------- Carte hors ligne (fonds IGN le long du parcours) ---------- */
+var offlineBusy = false;
+$('btnOffline').onclick = function () {
+  var r = state.route; if (!r || offlineBusy) return;
+  if (!('caches' in window)) return toast('Stockage hors ligne indisponible sur cet appareil');
+  var tiles = C.corridorTiles(r, [11, 12, 13, 14, 15, 16], 400);
+  var label = $('btnOffline').querySelector('span');
+  offlineBusy = true; var done = 0, fail = 0, i = 0;
+  var tpl = ignUrl('GEOGRAPHICALGRIDSYSTEMS.PLANIGNV2', 'image/png');
+  caches.open('piste-tiles').then(function (cache) {
+    function worker() {
+      if (i >= tiles.length) return Promise.resolve();
+      var t = tiles[i++];
+      var url = tpl.replace('{z}', t.z).replace('{y}', t.y).replace('{x}', t.x);
+      return cache.match(url).then(function (hit) {
+        if (hit) return;
+        return fetch(url, { mode: 'cors' }).then(function (resp) { if (!resp.ok) throw new Error(resp.status); return cache.put(url, resp); });
+      }).then(function () { done++; }, function () { fail++; }).then(function () {
+        label.textContent = 'Téléchargement ' + Math.round((done + fail) / tiles.length * 100) + ' %';
+        if (fail > 20 && done === 0) { i = tiles.length; }
+        return worker();
+      });
+    }
+    return Promise.all([worker(), worker(), worker(), worker()]);
+  }).then(function () {
+    offlineBusy = false; label.textContent = 'Carte hors ligne';
+    if (done === 0) return toast('Téléchargement refusé par le serveur IGN ou pas de réseau', 5000);
+    settings.offlineReady = true; save('settings', settings);
+    if (settings.base !== 'ign') setBase('ign');
+    toast('Carte IGN du parcours disponible hors ligne (' + done + ' tuiles' + (fail ? ', ' + fail + ' échecs' : '') + ')', 5000);
+  });
+};
 
 /* ---------- Démarrage ---------- */
 renderSaved();

@@ -20,7 +20,7 @@ assign uphillcost      0
 assign uphillcutoff    0
 
 assign validForCars    1
-assign turnInstructionMode = 1  # %turnInstructionMode% | Instructions | [0=none, 1=auto-choose, 3=osmand-style]
+assign turnInstructionMode = 2  # %turnInstructionMode% | Instructions | [0=none, 1=auto-choose, 2=locus-style, 3=osmand-style]
 
 ---context:way
 
