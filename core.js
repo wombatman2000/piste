@@ -221,7 +221,48 @@
     return 'ok';
   }
 
+  // Point à distM mètres de p dans la direction bearing (degrés, 0 = nord)
+  function destination(p, bearing, distM) {
+    var d = distM / R, b = rad(bearing), la = rad(p[0]), lo = rad(p[1]);
+    var la2 = Math.asin(Math.sin(la) * Math.cos(d) + Math.cos(la) * Math.sin(d) * Math.cos(b));
+    var lo2 = lo + Math.atan2(Math.sin(b) * Math.sin(d) * Math.cos(la), Math.cos(d) - Math.sin(la) * Math.sin(la2));
+    return [la2 * 180 / Math.PI, ((lo2 * 180 / Math.PI) + 540) % 360 - 180];
+  }
+
+  // Petit générateur pseudo-aléatoire reproductible
+  function rng(seed) {
+    var s = (seed >>> 0) || 1;
+    return function () { s ^= s << 13; s >>>= 0; s ^= s >>> 17; s ^= s << 5; s >>>= 0; return s / 4294967296; };
+  }
+
+  // Facteur moyen entre distance à vol d'oiseau et distance roulée, selon la dose de TT
+  var DETOUR = { 1: 1.25, 2: 1.35, 3: 1.5 };
+
+  // Rayon du cercle pour viser distM (polygone à n côtés, départ compris)
+  function loopRadius(distM, n, level) {
+    return distM / (2 * n * Math.sin(Math.PI / n) * (DETOUR[level] || 1.35));
+  }
+
+  // Points de passage d'une boucle : départ, n-1 points sur un cercle décalé vers bearing, retour au départ
+  function loopWaypoints(start, bearing, radius, n, seed) {
+    var rand = rng(seed || 1);
+    var center = destination(start, bearing, radius);
+    var back = (bearing + 180) % 360; // direction du départ vu depuis le centre
+    var dir = rand() < 0.5 ? 1 : -1;  // sens horaire ou anti-horaire
+    var pts = [start.slice(0, 2)];
+    for (var i = 1; i < n; i++) {
+      var a = back + dir * (360 / n) * i + (rand() - 0.5) * (220 / n);
+      var rr = radius * (0.85 + rand() * 0.3);
+      pts.push(destination(center, a, rr));
+    }
+    pts.push(start.slice(0, 2));
+    return pts;
+  }
+
+  var BEARINGS = { N: 0, NE: 45, E: 90, SE: 135, S: 180, SO: 225, O: 270, NO: 315 };
+
   var api = {
+    destination: destination, loopRadius: loopRadius, loopWaypoints: loopWaypoints, BEARINGS: BEARINGS,
     haversine: haversine, cumulative: cumulative, parseTags: parseTags, surfaceClass: surfaceClass,
     parseBrouter: parseBrouter, fromCoords: fromCoords, computeAscend: computeAscend,
     unpavedShare: unpavedShare, estimateHours: estimateHours, sample: sample,

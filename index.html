@@ -167,6 +167,16 @@ h2 { font: 700 15px/1.2 var(--display); letter-spacing: .12em; text-transform: u
 .wp.end { background: var(--accent); color: #fff; border-color: #fff; }
 .fuel { width: 26px; height: 26px; border-radius: 7px; background: #fff; border: 2px solid #1f2622; display: grid; place-items: center; box-shadow: 0 1px 4px rgba(0,0,0,.35); }
 .fuel svg { width: 15px; height: 15px; }
+.compass { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; max-width: 260px; margin: 0 auto; }
+.compass button { border: 1px solid var(--line); background: var(--bg); border-radius: 10px; padding: 10px 0; font: 700 16px/1 var(--display); letter-spacing: .06em; }
+.compass button.mid { font: 500 13px/1.1 var(--body); letter-spacing: 0; }
+.compass button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.kmrow { display: flex; align-items: center; gap: 12px; }
+.kmrow input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.kmrow output { font: 700 26px/1 var(--display); font-variant-numeric: tabular-nums; min-width: 3.6em; text-align: right; }
+.panel { position: fixed; inset: auto 0 0 0; max-height: 85vh; z-index: 2000; border-radius: 16px 16px 0 0; box-shadow: 0 -8px 30px rgba(0,0,0,.3); }
+@media (min-width: 900px) { .panel { left: 0; right: auto; width: 400px; } }
+.btn.secondary { flex: 1; justify-content: center; font-weight: 600; }
 .me { width: 16px; height: 16px; border-radius: 50%; background: #2f7de1; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(47,125,225,.25); }
 .leaflet-popup-content { font: 14px/1.4 var(--body); }
 .leaflet-popup-content button { margin-top: 6px; }
@@ -224,6 +234,7 @@ h2 { font: 700 15px/1.2 var(--display); letter-spacing: .12em; text-transform: u
     <button class="btn danger" id="btnClear" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg><span>Effacer</span></button>
   </div>
   <div class="row">
+    <button class="btn secondary" id="btnAutoLoop" type="button"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/><path d="M12 4v3M12 17v3M4 12h3M17 12h3"/><path d="m12 9 2 5-2-1-2 1z" fill="currentColor"/></svg>Créer une boucle</button>
     <button class="btn primary" id="btnSend" type="button">Envoyer à OsmAnd</button>
   </div>
 
@@ -278,7 +289,7 @@ h2 { font: 700 15px/1.2 var(--display); letter-spacing: .12em; text-transform: u
   </div>
 </div>
 
-<div class="sheet" id="settings" hidden style="position:fixed;inset:auto 0 0 0;max-height:80vh;z-index:2000;border-radius:16px 16px 0 0;box-shadow:0 -8px 30px rgba(0,0,0,.3)">
+<div class="sheet panel" id="settings" hidden>
   <div style="display:flex;align-items:center;justify-content:space-between;padding-top:12px">
     <h2 style="margin:0">Réglages</h2>
     <button class="icon-btn" id="btnCloseSettings" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
@@ -290,6 +301,30 @@ h2 { font: 700 15px/1.2 var(--display); letter-spacing: .12em; text-transform: u
   <label class="check"><input id="fFords" type="checkbox">Éviter les gués</label>
   <label class="check"><input id="fG5" type="checkbox">Autoriser les chemins très dégradés (grade 5)</label>
   <p class="note">La dose de tout-terrain se règle en haut : Roulant garde surtout la route et les pistes stabilisées, Engagé cherche le plus de chemins possible quitte à allonger nettement le trajet.</p>
+</div>
+
+<div class="sheet panel" id="loopPanel" hidden>
+  <div style="display:flex;align-items:center;justify-content:space-between;padding-top:12px">
+    <h2 style="margin:0">Boucle depuis ma position</h2>
+    <button class="icon-btn" id="btnCloseLoop" type="button" aria-label="Fermer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+  </div>
+  <p class="note" id="loopPos" style="margin:6px 0 10px">Recherche de ta position…</p>
+  <label class="field" for="fLoopKm">Distance</label>
+  <div class="kmrow">
+    <input id="fLoopKm" type="range" min="20" max="400" step="5">
+    <output id="oLoopKm" for="fLoopKm">80 km</output>
+  </div>
+  <p class="field" style="margin:14px 0 6px">Direction</p>
+  <div class="compass" id="compass" role="group" aria-label="Direction de la boucle">
+    <button type="button" data-dir="NO">NO</button><button type="button" data-dir="N">N</button><button type="button" data-dir="NE">NE</button>
+    <button type="button" data-dir="O">O</button><button type="button" data-dir="?" class="mid">Au hasard</button><button type="button" data-dir="E">E</button>
+    <button type="button" data-dir="SO">SO</button><button type="button" data-dir="S">S</button><button type="button" data-dir="SE">SE</button>
+  </div>
+  <div id="loopResult"></div>
+  <div class="row">
+    <button class="btn" id="btnLoopAgain" type="button" hidden><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 11a8 8 0 1 0-2.3 5.7"/><path d="M20 4v7h-7"/></svg>Autre variante</button>
+    <button class="btn primary" id="btnMakeLoop" type="button">Créer la boucle</button>
+  </div>
 </div>
 
 <div class="toast" id="toast" hidden></div>
@@ -411,7 +446,9 @@ function wpIcon(i, n) {
 function renderWps() {
   wpLayer.clearLayers();
   var n = state.wps.length;
+  var closed = n > 2 && C.haversine(state.wps[0], state.wps[n - 1]) < 30; // boucle : arrivée = départ
   state.wps.forEach(function (p, i) {
+    if (closed && i === n - 1) return;
     var m = L.marker(p, { icon: wpIcon(i, n), draggable: true, autoPan: true });
     m.on('dragend', function () { var ll = m.getLatLng(); state.wps[i] = [ll.lat, ll.lng]; changed(); });
     var box = document.createElement('div');
@@ -497,17 +534,42 @@ function getProfile() {
     profileCache[key] = j.profileid; return j.profileid;
   });
 }
-function routeUrl(profile, extra) {
-  var ll = state.wps.map(function (p) { return p[1].toFixed(6) + ',' + p[0].toFixed(6); }).join('|');
+function routeUrl(wps, profile, extra) {
+  var ll = wps.map(function (p) { return p[1].toFixed(6) + ',' + p[0].toFixed(6); }).join('|');
   return BROUTER + '?lonlats=' + ll + '&profile=' + encodeURIComponent(profile) + '&alternativeidx=0&format=geojson' + (extra || '');
 }
-function fetchRoute(profile, extra) {
-  return fetch(routeUrl(profile, extra)).then(function (r) {
+function fetchRoute(wps, profile, extra) {
+  return fetch(routeUrl(wps, profile, extra)).then(function (r) {
     return r.text().then(function (t) {
       if (!r.ok) throw new Error(t.trim() || ('Erreur ' + r.status));
       return JSON.parse(t);
     });
   });
+}
+// Calcule un parcours passant par wps (profil TT, repli voiture tout-chemin)
+function routeFor(wps) {
+  return getProfile().then(function (pid) {
+    return fetchRoute(wps, pid).catch(function (err) {
+      if (/profile|file/i.test(err.message) && !/not mapped/i.test(err.message)) {
+        profileCache = {};
+        return getProfile().then(function (id) { return fetchRoute(wps, id); });
+      }
+      throw err;
+    });
+  }).catch(function (err) {
+    if (/Profil refusé|profil absent/.test(err.message)) {
+      toast('Profil TT indisponible, calcul approché avec un profil voiture tout-chemin', 4500);
+      return fetchRoute(wps, 'car-vario', '&profile:use_offroad=1&profile:avoid_motorways=1');
+    }
+    throw err;
+  }).then(function (json) { return C.parseBrouter(json); });
+}
+function routeError(err) {
+  var m = String((err && err.message) || err);
+  if (/not mapped|position not/i.test(m)) return 'Un point est trop loin d\'une voie accessible : déplace-le près d\'un chemin ou d\'une route';
+  if (/Failed to fetch|NetworkError|Load failed/i.test(m)) return 'Pas de réseau : le calcul nécessite une connexion';
+  if (/target island|no track|not found/i.test(m)) return 'Aucun passage autorisé trouvé entre ces points';
+  return m;
 }
 function recompute() {
   clearTimeout(timer);
@@ -518,28 +580,12 @@ function doRoute() {
   if (state.imported) return;
   if (state.wps.length < 2) { state.route = null; routeLayer.clearLayers(); renderStats(); return; }
   var seq = ++reqSeq; busy(true);
-  getProfile().then(function (pid) {
-    return fetchRoute(pid).catch(function (err) {
-      if (/profile|not found|file/i.test(err.message)) { profileCache = {}; return getProfile().then(fetchRoute); }
-      throw err;
-    });
-  }).catch(function (err) {
-    if (/Profil refusé|profil absent/.test(err.message) || err instanceof TypeError) {
-      toast('Profil TT indisponible, calcul approché avec un profil voiture tout-chemin', 4500);
-      return fetchRoute('car-vario', '&profile:use_offroad=1&profile:avoid_motorways=1');
-    }
-    throw err;
-  }).then(function (json) {
+  routeFor(state.wps).then(function (r) {
     if (seq !== reqSeq) return;
-    state.route = C.parseBrouter(json);
-    drawRoute(); renderStats();
+    state.route = r; drawRoute(); renderStats();
   }).catch(function (err) {
     if (seq !== reqSeq) return;
-    var m = String(err.message || err);
-    if (/not mapped|position not/i.test(m)) m = 'Un point est trop loin d\'une voie accessible : déplace-le près d\'un chemin ou d\'une route';
-    else if (/Failed to fetch|NetworkError|Load failed/i.test(m)) m = 'Pas de réseau : le calcul nécessite une connexion';
-    else if (/target island|no track|not found/i.test(m)) m = 'Aucun passage autorisé trouvé entre ces points';
-    toast(m, 5000);
+    toast(routeError(err), 5000);
   }).then(function () { busy(false); });
 }
 
@@ -829,17 +875,133 @@ function openSaved(it) {
 }
 
 /* ---------- Position ---------- */
+var lastFix = null, watchId = null, posWaiters = [];
+function showMe(ll) {
+  if (!meMarker) meMarker = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false, zIndexOffset: -100 }).addTo(map);
+  else meMarker.setLatLng(ll);
+}
+function startWatch() {
+  if (!navigator.geolocation || watchId !== null) return;
+  watchId = navigator.geolocation.watchPosition(function (pos) {
+    var first = !lastFix;
+    lastFix = { ll: [pos.coords.latitude, pos.coords.longitude], acc: pos.coords.accuracy, t: Date.now() };
+    showMe(lastFix.ll);
+    if (first && !state.wps.length && !state.imported) map.setView(lastFix.ll, 13);
+    posWaiters.splice(0).forEach(function (w) { w.ok(lastFix); });
+    updateLoopPos();
+  }, function (err) {
+    if (err.code === 1) { navigator.geolocation.clearWatch(watchId); watchId = 'refus'; }
+    posWaiters.splice(0).forEach(function (w) { w.ko(err); });
+    updateLoopPos();
+  }, { enableHighAccuracy: true, maximumAge: 60000, timeout: 20000 });
+}
+// Position récente, ou attente d'un premier point GPS
+function getPosition() {
+  if (lastFix && Date.now() - lastFix.t < 5 * 60000) return Promise.resolve(lastFix);
+  if (watchId === 'refus' || !navigator.geolocation) return Promise.reject(new Error('refus'));
+  startWatch();
+  return new Promise(function (ok, ko) {
+    posWaiters.push({ ok: ok, ko: ko });
+    setTimeout(function () { ko(new Error('délai')); }, 20000);
+  });
+}
 $('btnLocate').onclick = function () {
-  if (!navigator.geolocation) return toast('Localisation indisponible sur cet appareil');
   busy(true);
-  navigator.geolocation.getCurrentPosition(function (pos) {
-    busy(false);
-    var ll = [pos.coords.latitude, pos.coords.longitude];
-    if (!meMarker) meMarker = L.marker(ll, { icon: L.divIcon({ className: '', html: '<div class="me"></div>', iconSize: [16, 16], iconAnchor: [8, 8] }), interactive: false }).addTo(map);
-    else meMarker.setLatLng(ll);
-    map.setView(ll, Math.max(map.getZoom(), 14));
-  }, function () { busy(false); toast('Position refusée ou introuvable'); }, { enableHighAccuracy: true, timeout: 12000, maximumAge: 30000 });
+  getPosition().then(function (f) { map.setView(f.ll, Math.max(map.getZoom(), 14)); })
+    .catch(function () { toast('Position refusée ou introuvable. Autorise la localisation pour Safari dans Réglages → Confidentialité.', 5000); })
+    .then(function () { busy(false); });
 };
+
+/* ---------- Boucle automatique ---------- */
+var DIR_NAMES = { N: 'le nord', NE: 'le nord-est', E: 'l\'est', SE: 'le sud-est', S: 'le sud', SO: 'le sud-ouest', O: 'l\'ouest', NO: 'le nord-ouest' };
+var loopSeed = 1, loopBusy = false;
+settings.loopKm = settings.loopKm || 80; settings.loopDir = settings.loopDir || 'N';
+$('fLoopKm').value = settings.loopKm; $('oLoopKm').textContent = settings.loopKm + ' km';
+$('fLoopKm').oninput = function () { $('oLoopKm').textContent = this.value + ' km'; };
+$('fLoopKm').onchange = function () { settings.loopKm = +this.value; save('settings', settings); };
+function renderCompass() {
+  document.querySelectorAll('#compass button').forEach(function (b) { b.setAttribute('aria-pressed', String(b.dataset.dir === settings.loopDir)); });
+}
+document.querySelectorAll('#compass button').forEach(function (b) {
+  b.onclick = function () { settings.loopDir = b.dataset.dir; save('settings', settings); renderCompass(); };
+});
+renderCompass();
+function updateLoopPos() {
+  var el = $('loopPos'); if (!el) return;
+  if (lastFix) el.textContent = 'Départ : ta position (précision ' + Math.round(lastFix.acc) + ' m).';
+  else if (watchId === 'refus' || !navigator.geolocation) el.textContent = 'Localisation refusée : la boucle partira du centre de la carte. Autorise la localisation pour Safari dans les Réglages de l\'iPhone.';
+  else el.textContent = 'Recherche de ta position…';
+}
+$('btnAutoLoop').onclick = function () {
+  $('loopPanel').hidden = false; $('loopResult').innerHTML = ''; $('btnLoopAgain').hidden = true;
+  startWatch(); updateLoopPos();
+};
+$('btnCloseLoop').onclick = function () { $('loopPanel').hidden = true; };
+$('btnMakeLoop').onclick = function () { loopSeed = Math.floor(Math.random() * 1e9) + 1; makeLoop(); };
+$('btnLoopAgain').onclick = function () { loopSeed += 7919; makeLoop(); };
+
+function makeLoop() {
+  if (loopBusy) return;
+  loopBusy = true; busy(true);
+  var btns = [$('btnMakeLoop'), $('btnLoopAgain')];
+  btns.forEach(function (b) { b.disabled = true; });
+  $('loopResult').innerHTML = '<p class="note" style="margin-top:12px">Calcul de la boucle…</p>';
+  var target = settings.loopKm * 1000, dir = settings.loopDir, seed = loopSeed;
+  var rnd = (function (x) { return function () { x = (x * 16807) % 2147483647; return x / 2147483647; }; })(seed % 2147483646 + 1);
+  var bearing = dir === '?' ? rnd() * 360 : C.BEARINGS[dir] + (rnd() - 0.5) * 30;
+  var n = target > 150000 ? 6 : 5;
+  var radius = C.loopRadius(target, n, state.level);
+  var best = null, startPt = null, fromGps = true;
+
+  getPosition().then(function (f) { return f.ll; }, function () {
+    fromGps = false;
+    var c = map.getCenter(); return [c.lat, c.lng];
+  }).then(function (start) {
+    startPt = start;
+    var attempt = 0;
+    function step() {
+      var wps = C.loopWaypoints(start, bearing, radius, n, seed + attempt * 101);
+      return routeFor(wps).then(function (r) {
+        var err = Math.abs(r.length - target) / target;
+        if (!best || err < best.err) best = { wps: wps, route: r, err: err };
+        attempt++;
+        if (err < 0.08 || attempt >= 4) return;
+        radius *= Math.min(1.6, Math.max(0.6, target / r.length));
+        return step();
+      }, function (e) {
+        attempt++;
+        if (attempt >= 5 || !/not mapped|position not|target island|no track/i.test(e.message || '')) {
+          if (best) return; throw e;
+        }
+        radius *= 0.92; // un point tombé hors réseau : on resserre et on décale
+        return step();
+      });
+    }
+    return step();
+  }).then(function () {
+    reqSeq++; // annule un calcul en cours
+    state.imported = null; save('importedDraft', null);
+    state.wps = best.wps; save('draft', state.wps);
+    state.route = best.route; state.stations = []; fuelLayer.clearLayers(); renderFuel();
+    renderWps(); drawRoute(); renderStats();
+    var panelH = $('loopPanel').hidden ? 0 : $('loopPanel').offsetHeight;
+    var under = window.innerWidth >= 900 ? 0 : panelH;
+    map.fitBounds(L.latLngBounds(best.route.coords.map(function (c) { return [c[0], c[1]]; })),
+      { paddingTopLeft: [30, 30], paddingBottomRight: [30, Math.min(under, map.getSize().y * 0.6) + 30] });
+    var km = Math.round(best.route.length / 1000), share = C.unpavedShare(best.route.mix);
+    $('fName').value = 'Boucle ' + km + ' km ' + (dir === '?' ? '' : dir + ' ') + new Date().toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
+    $('loopResult').innerHTML = '<div class="okmsg">Boucle de ' + km + ' km' + (dir === '?' ? '' : ' vers ' + DIR_NAMES[dir]) +
+      (share == null ? '' : ', ' + Math.round(share * 100) + ' % de chemins') + '.' +
+      (Math.abs(best.route.length - target) / target > 0.15 ? ' Le réseau de chemins ne permet pas d\'approcher davantage les ' + settings.loopKm + ' km ici.' : '') +
+      (fromGps ? '' : ' Départ au centre de la carte.') + ' Tu peux déplacer les points sur la carte.</div>';
+    $('btnLoopAgain').hidden = false;
+  }).catch(function (e) {
+    $('loopResult').innerHTML = '<div class="alert">' + routeError(e) + '</div>';
+  }).then(function () {
+    loopBusy = false; busy(false);
+    btns.forEach(function (b) { b.disabled = false; });
+  });
+}
 
 /* ---------- Démarrage ---------- */
 renderSaved();
@@ -849,6 +1011,8 @@ if (state.imported && state.imported.coords && state.imported.coords.length > 1)
   state.imported = null; renderWps(); renderStats();
   if (state.wps.length > 1) { map.fitBounds(L.latLngBounds(state.wps), { padding: [40, 40] }); recompute(); }
 }
+
+startWatch();
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(function () {});
