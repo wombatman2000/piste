@@ -996,15 +996,15 @@ var lastFix = null, watchId = null, posWaiters = [], lastGeoErr = null;
 // Modes d'énergie : fréquence de traitement GPS, recentrage, zoom, carte sombre, suivi de position hors guidage
 var ENERGY = {
   eco: { minFix: 3000, edge: 0.28, zoom: 15, dark: 'on', reroute: 12000, liveGps: false,
-    note: 'Carte sombre en guidage, mises à jour toutes les 3 s (plus fréquentes avant un virage), recentrage rare, zoom large, GPS coupé hors guidage. Idéal pour les longues journées.' },
+    note: 'Carte sombre en guidage, mises à jour toutes les 3 s (plus fréquentes avant un virage), zoom large, GPS coupé hors guidage. Idéal pour les longues journées.' },
   optimal: { minFix: 1500, edge: 0.15, zoom: 16, dark: 'auto', reroute: 6000, liveGps: false,
     note: 'Bon compromis : carte sombre si le téléphone est en mode sombre, mises à jour toutes les 1,5 s, GPS coupé hors guidage.' },
   perf: { minFix: 0, edge: 0, zoom: 17, dark: 'auto', reroute: 5000, liveGps: true,
-    note: 'Fluidité maximale : chaque position GPS traitée, carte toujours centrée sur toi, zoom serré, point bleu suivi en permanence. Consomme nettement plus.' }
+    note: 'Fluidité maximale : chaque position GPS traitée, zoom serré, point bleu suivi en permanence. Consomme nettement plus.' }
 };
 settings.energy = ENERGY[settings.energy] ? settings.energy : 'optimal';
 function E() { return ENERGY[settings.energy]; }
-var APP_VERSION = '15';
+var APP_VERSION = '16';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
@@ -1346,7 +1346,7 @@ $('navStop').onclick = function () {
   stopArmed = false; stopNav();
 };
 $('navVoice').onclick = function () { settings.voice = !settings.voice; save('settings', settings); this.setAttribute('aria-pressed', String(settings.voice)); if (settings.voice) speak('Voix activée'); };
-$('navCenter').onclick = function () { if (!nav) return; nav.follow = true; if (nav.lastP) map.setView(nav.lastP, Math.max(map.getZoom(), 15)); };
+$('navCenter').onclick = function () { if (!nav) return; nav.follow = true; if (nav.lastP) placeArrow(nav.lastP, true); };
 map.on('dragstart', function () { if (nav) nav.follow = false; });
 
 function navOnFix(pos) {
@@ -1369,12 +1369,7 @@ function navOnFix(pos) {
   } else navMarker.setLatLng(p);
   var svgEl = navMarker.getElement() && navMarker.getElement().querySelector('svg');
   if (svgEl) svgEl.style.transform = 'rotate(' + Math.round(nav.heading) + 'deg)';
-  if (nav.follow) {
-    // recentre seulement quand la position s'éloigne du centre (moins de tuiles et de calculs), sauf en Performance
-    var sz = map.getSize(), pt = map.latLngToContainerPoint(p), edge = E().edge;
-    if (!edge) map.panTo(p, { animate: true, duration: 0.4 });
-    else if (Math.abs(pt.x - sz.x / 2) > sz.x * edge || Math.abs(pt.y - sz.y / 2) > sz.y * edge) map.panTo(p, { animate: false });
-  }
+  if (nav.follow) placeArrow(p, true);
   $('navSpeed').textContent = Math.round(v * 3.6);
 
   var r = nav.route, m = C.track(r, p, nav.at), limit = Math.max(45, Math.min(120, acc * 1.5));
@@ -1391,6 +1386,19 @@ function navOnFix(pos) {
   }
   renderNav(v);
 }
+// Garde la flèche fixe, centrée dans le tiers bas de la zone visible ; la carte glisse sans à-coup
+function placeArrow(p, smooth) {
+  var size = map.getSize(), pt = map.latLngToContainerPoint(p);
+  var topH = $('nav').firstElementChild.offsetHeight, botH = document.querySelector('.nav-bottom').offsetHeight;
+  var target = L.point(size.x / 2, topH + (size.y - topH - botH) * 0.7);
+  var delta = pt.subtract(target);
+  if (Math.abs(delta.x) < 1 && Math.abs(delta.y) < 1) return;
+  var big = Math.abs(delta.x) > size.x || Math.abs(delta.y) > size.y;
+  // durée calée sur l'intervalle entre deux positions : le mouvement est continu
+  var dur = Math.min(2.5, Math.max(0.6, (E().minFix || 1000) / 1000 * 0.9));
+  map.panBy(delta, smooth && !big ? { animate: true, duration: dur, easeLinearity: 1, noMoveStart: true } : { animate: false });
+}
+map.on('zoomend', function () { if (nav && nav.follow && nav.lastP) placeArrow(nav.lastP, false); });
 function cardinal(b) { return ['le nord', 'le nord-est', 'l\'est', 'le sud-est', 'le sud', 'le sud-ouest', 'l\'ouest', 'le nord-ouest'][Math.round(b / 45) % 8]; }
 
 function renderNav(v) {
