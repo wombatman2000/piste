@@ -1,5 +1,5 @@
 // Piste : garde l'appli disponible sans réseau (la carte et le calcul restent en ligne)
-const CACHE = 'piste-v12';
+const CACHE = 'piste-v15';
 const TILES = 'piste-tiles';
 const SHELL = ['./', 'index.html', 'core.js', 'moto-tt.brf', 'manifest.webmanifest', 'icon-192.png', 'apple-touch-icon.png',
   'https://unpkg.com/leaflet@1.9.4/dist/leaflet.css', 'https://unpkg.com/leaflet@1.9.4/dist/leaflet.js'];
