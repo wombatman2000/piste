@@ -1028,7 +1028,7 @@ var ENERGY = {
 };
 settings.energy = ENERGY[settings.energy] ? settings.energy : 'optimal';
 function E() { return ENERGY[settings.energy]; }
-var APP_VERSION = '19';
+var APP_VERSION = '20';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
@@ -1441,11 +1441,13 @@ function setRotMode(on) {
   rot.on = on; document.body.classList.toggle('rotmode', on);
   if (on) {
     layoutRot(); map.dragging.disable(); map.touchZoom.disable(); map.doubleClickZoom.disable();
+    map.options.zoomSnap = 0; map.options.zoomDelta = 1;
     if (nav) setRotation(nav.heading || 0);
   } else {
     ['width', 'height', 'left', 'top', 'right', 'bottom', 'transform', 'transformOrigin'].forEach(function (k) { m.style[k] = ''; });
     rot.angle = 0; map.invalidateSize({ pan: false });
     map.dragging.enable(); map.touchZoom.enable(); map.doubleClickZoom.enable();
+    map.options.zoomSnap = 1; if (map.getZoom() % 1) map.setZoom(Math.round(map.getZoom()), { animate: false });
   }
 }
 function setRotation(heading) {
@@ -1454,22 +1456,56 @@ function setRotation(heading) {
   rot.angle += diff;
   $('map').style.transform = 'rotate(' + rot.angle.toFixed(1) + 'deg)';
 }
+// Gestes sur la carte orientée : glisser à un doigt, pincer à deux doigts pour zoomer
 (function () {
-  var wrap = document.querySelector('.mapwrap'), drag = null;
+  var wrap = document.querySelector('.mapwrap'), pts = {}, last = null;
+  function list() { return Object.keys(pts).map(function (k) { return pts[k]; }); }
+  function snapshot() {
+    var l = list();
+    if (l.length >= 2) {
+      var a = l[0], b = l[1];
+      last = { n: 2, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, d: Math.hypot(a.x - b.x, a.y - b.y) || 1 };
+    } else if (l.length === 1) last = { n: 1, x: l[0].x, y: l[0].y };
+    else last = null;
+  }
+  // écart à l'écran -> écart dans le repère de la carte tournée
+  function unrotate(dx, dy) {
+    var t = rot.angle * Math.PI / 180;
+    return [dx * Math.cos(t) + dy * Math.sin(t), -dx * Math.sin(t) + dy * Math.cos(t)];
+  }
   wrap.addEventListener('pointerdown', function (e) {
     if (!nav || !rot.on || e.target.closest('.nav-btn')) return;
-    drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    pts[e.pointerId] = { x: e.clientX, y: e.clientY }; snapshot();
   });
   wrap.addEventListener('pointermove', function (e) {
-    if (!drag || e.pointerId !== drag.id) return;
-    var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
-    if (Math.abs(dx) + Math.abs(dy) < 2) return;
-    drag.x = e.clientX; drag.y = e.clientY;
-    var t = rot.angle * Math.PI / 180, cx = dx * Math.cos(t) + dy * Math.sin(t), cy = -dx * Math.sin(t) + dy * Math.cos(t);
-    nav.follow = false;
-    map.panBy([-cx, -cy], { animate: false });
+    if (!pts[e.pointerId] || !last) return;
+    pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+    var l = list();
+    if (l.length >= 2 && last.n === 2) {
+      var a = l[0], b = l[1], mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, d = Math.hypot(a.x - b.x, a.y - b.y) || 1;
+      var z = Math.max(map.getMinZoom(), Math.min(19, map.getZoom() + Math.log2(d / last.d)));
+      if (Math.abs(z - map.getZoom()) > 0.01) {
+        if (nav.follow) {
+          map.setZoom(z, { animate: false }); placeArrow(nav.lastP || map.getCenter(), false); // reste centré sur la flèche
+        } else {
+          var r = $('map').getBoundingClientRect(), c = unrotate(mx - (r.left + r.width / 2), my - (r.top + r.height / 2));
+          var size = map.getSize();
+          map.setZoomAround(L.point(size.x / 2 + c[0], size.y / 2 + c[1]), z, { animate: false });
+        }
+      }
+      if (!nav.follow) { var m = unrotate(mx - last.x, my - last.y); map.panBy([-m[0], -m[1]], { animate: false }); }
+      last = { n: 2, x: mx, y: my, d: d };
+    } else if (l.length === 1 && last.n === 1) {
+      var dx = e.clientX - last.x, dy = e.clientY - last.y;
+      if (Math.abs(dx) + Math.abs(dy) < 2) return;
+      nav.follow = false;
+      var c2 = unrotate(dx, dy); map.panBy([-c2[0], -c2[1]], { animate: false });
+      last = { n: 1, x: e.clientX, y: e.clientY };
+    }
   });
-  ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) { wrap.addEventListener(ev, function () { drag = null; }); });
+  ['pointerup', 'pointercancel'].forEach(function (ev) {
+    wrap.addEventListener(ev, function (e) { delete pts[e.pointerId]; snapshot(); });
+  });
 })();
 window.addEventListener('resize', function () { if (nav && rot.on) { layoutRot(); if (nav.lastP) placeArrow(nav.lastP, false); } });
 $('navZoomIn').onclick = function () { map.zoomIn(); };
