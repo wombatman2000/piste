@@ -214,6 +214,12 @@ body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
 .nav-btn.stop { background: var(--warn); color: #fff; border-color: var(--warn); }
 .navme { width: 34px; height: 34px; display: grid; place-items: center; }
 .navme svg { width: 34px; height: 34px; filter: drop-shadow(0 1px 3px rgba(0,0,0,.5)); }
+body.navmode .leaflet-control-container { display: none; }
+body.navmode .mapwrap { overflow: hidden; }
+body.rotmode #map { transition: transform .9s linear; will-change: transform; }
+.nav-zoom { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-50%); display: grid; gap: 8px; }
+.nav-attr { position: absolute; left: max(10px, env(safe-area-inset-left, 0px)); bottom: calc(100% + 4px); font-size: 10px; color: #333; background: rgba(255,255,255,.75); padding: 1px 5px; border-radius: 4px; }
+.nav-bottom { position: relative; }
 body.navdark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
 .me { width: 16px; height: 16px; border-radius: 50%; background: #2f7de1; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(47,125,225,.25); }
 .leaflet-popup-content { font: 14px/1.4 var(--body); }
@@ -340,6 +346,7 @@ body.navdark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightnes
     <label class="field">Moyenne en chemin (km/h)<input id="fVTT" type="number" inputmode="numeric" min="5" max="60"></label>
   </div>
   <label class="field" style="margin-top:10px">Guidage avec le bouton Naviguer<select id="fNavMode"><option value="ask">Me demander à chaque fois</option><option value="piste">Toujours dans Piste</option><option value="gpx">Toujours télécharger la trace</option></select></label>
+  <label class="field" style="margin-top:10px">Orientation de la carte en guidage<select id="fOrient"><option value="heading">Dans le sens de la marche</option><option value="north">Nord en haut</option></select></label>
   <p class="field" style="margin:14px 0 6px">Consommation d'énergie</p>
   <div class="seg3" role="group" aria-label="Mode d'énergie">
     <button type="button" data-energy="eco">Éco</button>
@@ -390,7 +397,12 @@ body.navdark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightnes
     </div>
     <div class="nav-off" id="navOff" hidden></div>
   </div>
+  <div class="nav-zoom">
+    <button class="nav-btn" id="navZoomIn" type="button" aria-label="Zoomer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg></button>
+    <button class="nav-btn" id="navZoomOut" type="button" aria-label="Dézoomer"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M5 12h14"/></svg></button>
+  </div>
   <div class="nav-bottom">
+    <span class="nav-attr">© IGN · © OpenStreetMap</span>
     <div class="stat"><b id="navLeft">–</b><small>km restants</small></div>
     <div class="stat"><b id="navEta">–</b><small>arrivée</small></div>
     <div class="stat"><b id="navSpeed">–</b><small>km/h</small></div>
@@ -1004,7 +1016,7 @@ var ENERGY = {
 };
 settings.energy = ENERGY[settings.energy] ? settings.energy : 'optimal';
 function E() { return ENERGY[settings.energy]; }
-var APP_VERSION = '16';
+var APP_VERSION = '17';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
@@ -1288,7 +1300,8 @@ function startNav() {
   speak('Navigation démarrée', true); // débloque la voix sur iPhone (geste de l'utilisateur)
   nav = { base: r, route: r, ins: C.buildInstructions(r), at: 0, off: 0, offSince: 0, said: {}, follow: true,
     lastP: null, heading: 0, rerouting: false, lastReroute: 0, started: Date.now(), estH: C.estimateHours(r, settings.vRoute, settings.vTT) };
-  document.body.classList.add('navmode'); $('nav').hidden = false; applyNavDark(); $('loopPanel').hidden = true; $('settings').hidden = true;
+  document.body.classList.add('navmode'); $('nav').hidden = false; applyNavDark();
+  setTimeout(function () { if (nav) { setRotMode(settings.orient === 'heading'); if (nav.lastP) placeArrow(nav.lastP, false); } }, 60); $('loopPanel').hidden = true; $('settings').hidden = true;
   setTimeout(function () { map.invalidateSize(); }, 50);
   if (settings.base !== 'ign' && settings.offlineReady) setBase('ign');
   keepAwake().then(function (ok) { if (!ok) toast('Écran allumé non garanti : règle Réglages → Luminosité et affichage → Verrouillage automatique sur Jamais pendant la sortie', 7000); });
@@ -1305,6 +1318,7 @@ function stopNav() {
   var wl = wakeLock; wakeLock = null; if (wl) { try { wl.release(); } catch (e) {} }
   stopKeepVideo();
   try { speechSynthesis.cancel(); } catch (e) {}
+  setRotMode(false);
   document.body.classList.remove('navmode', 'navdark'); $('nav').hidden = true; stopWatch();
   setTimeout(function () { map.invalidateSize(); }, 50);
 }
@@ -1362,6 +1376,7 @@ function navOnFix(pos) {
     if (moved > 4) nav.heading = (pos.coords.heading != null && !isNaN(pos.coords.heading) && pos.coords.heading >= 0) ? pos.coords.heading : C.bearingTo(nav.lastP, p);
   }
   nav.lastP = p; nav.lastT = now; v = v || 0;
+  if (v > 1.5) setRotation(nav.heading); // cap fiable seulement en mouvement
   // marqueur
   if (!navMarker) {
     var icon = L.divIcon({ className: '', html: '<div class="navme"><svg viewBox="0 0 24 24"><path d="M12 2 4.5 20.3l.7.7L12 18l6.8 3 .7-.7z" fill="#2f7de1" stroke="#fff" stroke-width="1.6"/></svg></div>', iconSize: [34, 34], iconAnchor: [17, 17] });
@@ -1386,14 +1401,59 @@ function navOnFix(pos) {
   }
   renderNav(v);
 }
+/* Carte orientée dans le sens de la marche : le conteneur de carte est agrandi pour couvrir l'écran
+   quelle que soit la rotation, et tourne autour de la position de la flèche (tiers bas). */
+var rot = { on: false, angle: 0 };
+settings.orient = settings.orient === 'north' ? 'north' : 'heading';
+$('fOrient').value = settings.orient;
+$('fOrient').onchange = function () {
+  settings.orient = this.value; save('settings', settings);
+  if (nav) { setRotMode(settings.orient === 'heading'); if (nav.lastP) placeArrow(nav.lastP, false); }
+};
+function arrowAnchor() {
+  var wrap = document.querySelector('.mapwrap'), w = wrap.clientWidth, h = wrap.clientHeight;
+  var topH = $('nav').firstElementChild.offsetHeight, botH = document.querySelector('.nav-bottom').offsetHeight;
+  return { w: w, h: h, x: w / 2, y: topH + (h - topH - botH) * 0.7 };
+}
+function layoutRot() {
+  var a = arrowAnchor();
+  var R = Math.max(Math.hypot(a.x, a.y), Math.hypot(a.w - a.x, a.y), Math.hypot(a.x, a.h - a.y), Math.hypot(a.w - a.x, a.h - a.y));
+  var D = Math.ceil(2 * R + 16), m = $('map');
+  m.style.width = D + 'px'; m.style.height = D + 'px'; m.style.left = (a.x - D / 2) + 'px'; m.style.top = (a.y - D / 2) + 'px';
+  m.style.right = 'auto'; m.style.bottom = 'auto'; m.style.transformOrigin = '50% 50%';
+  map.invalidateSize({ pan: false });
+}
+function setRotMode(on) {
+  var m = $('map');
+  rot.on = on; document.body.classList.toggle('rotmode', on);
+  if (on) {
+    layoutRot(); map.dragging.disable(); map.touchZoom.disable(); map.doubleClickZoom.disable();
+    if (nav) setRotation(nav.heading || 0);
+  } else {
+    ['width', 'height', 'left', 'top', 'right', 'bottom', 'transform', 'transformOrigin'].forEach(function (k) { m.style[k] = ''; });
+    rot.angle = 0; map.invalidateSize({ pan: false });
+    map.dragging.enable(); map.touchZoom.enable(); map.doubleClickZoom.enable();
+  }
+}
+function setRotation(heading) {
+  if (!rot.on) return;
+  var diff = ((-heading - rot.angle) % 360 + 540) % 360 - 180; // plus court chemin, sans tour complet
+  rot.angle += diff;
+  $('map').style.transform = 'rotate(' + rot.angle.toFixed(1) + 'deg)';
+}
+window.addEventListener('resize', function () { if (nav && rot.on) { layoutRot(); if (nav.lastP) placeArrow(nav.lastP, false); } });
+$('navZoomIn').onclick = function () { map.zoomIn(); };
+$('navZoomOut').onclick = function () { map.zoomOut(); };
+
 // Garde la flèche fixe, centrée dans le tiers bas de la zone visible ; la carte glisse sans à-coup
 function placeArrow(p, smooth) {
-  var size = map.getSize(), pt = map.latLngToContainerPoint(p);
-  var topH = $('nav').firstElementChild.offsetHeight, botH = document.querySelector('.nav-bottom').offsetHeight;
-  var target = L.point(size.x / 2, topH + (size.y - topH - botH) * 0.7);
+  var size = map.getSize(), pt = map.latLngToContainerPoint(p), target;
+  if (rot.on) target = L.point(size.x / 2, size.y / 2); // le centre du conteneur tourné est sur la flèche
+  else { var a = arrowAnchor(); target = L.point(a.x, a.y); }
   var delta = pt.subtract(target);
   if (Math.abs(delta.x) < 1 && Math.abs(delta.y) < 1) return;
-  var big = Math.abs(delta.x) > size.x || Math.abs(delta.y) > size.y;
+  var a2 = arrowAnchor(), size2 = { x: a2.w, y: a2.h };
+  var big = Math.abs(delta.x) > size2.x || Math.abs(delta.y) > size2.y;
   // durée calée sur l'intervalle entre deux positions : le mouvement est continu
   var dur = Math.min(2.5, Math.max(0.6, (E().minFix || 1000) / 1000 * 0.9));
   map.panBy(delta, smooth && !big ? { animate: true, duration: dur, easeLinearity: 1, noMoveStart: true } : { animate: false });
