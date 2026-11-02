@@ -217,6 +217,7 @@ body.navmode .mapwrap { grid-row: 1; grid-column: 1; }
 body.navmode .leaflet-control-container { display: none; }
 body.navmode .mapwrap { overflow: hidden; }
 body.rotmode #map { transition: transform .9s linear; will-change: transform; }
+body.rotmode .mapwrap, body.rotmode #map { touch-action: none; }
 .nav-zoom { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-50%); display: grid; gap: 8px; }
 .nav-attr { position: absolute; left: max(10px, env(safe-area-inset-left, 0px)); bottom: calc(100% + 4px); font-size: 10px; color: #333; background: rgba(255,255,255,.75); padding: 1px 5px; border-radius: 4px; }
 .nav-bottom { position: relative; }
@@ -439,7 +440,7 @@ body.navdark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightnes
 'use strict';
 var C = window.PisteCore;
 var BROUTER = 'https://brouter.de/brouter';
-var OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter'];
+var OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://maps.mail.ru/osm/tools/overpass/api/interpreter'];
 var COLORS = { revetu: '#6b7780', facile: '#e2a72e', terre: '#c8641c', difficile: '#8a2a1c', inconnu: '#3c6fb0' };
 var LABELS = { revetu: 'Route', facile: 'Piste roulante', terre: 'Chemin', difficile: 'Difficile', inconnu: 'Inconnu' };
 
@@ -572,6 +573,7 @@ function changed() {
   recompute();
 }
 map.on('click', function (e) {
+  if (nav) return;
   if (!layersEl.hidden) { layersEl.hidden = true; return; }
   if (pickingStart) { setLoopStart([e.latlng.lat, e.latlng.lng]); return; }
   if (state.imported) { toast('Trace importée affichée : efface-la pour tracer un nouveau parcours'); return; }
@@ -782,9 +784,9 @@ function drawChart() {
 }
 
 /* ---------- Overpass ---------- */
-function overpass(q) {
+function overpass(q, ms) {
   var tryOne = function (i) {
-    return fetchT(OVERPASS[i], { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, 20000)
+    return fetchT(OVERPASS[i], { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(q) }, ms || 20000)
       .then(function (r) { if (!r.ok) throw new Error('Overpass ' + r.status); return r.json(); })
       .catch(function (e) { if (e.message !== 'CANCELLED' && i + 1 < OVERPASS.length) return tryOne(i + 1); throw e; });
   };
@@ -837,15 +839,19 @@ var pumpSvg = '<svg viewBox="0 0 24 24" fill="none" stroke="#1f2622" stroke-widt
 $('btnFuel').onclick = function () {
   var r = state.route;
   if (!r) return toast('Trace d\'abord un parcours');
-  var pts = C.sample(r.coords, 120).map(function (c) { return c[0].toFixed(5) + ',' + c[1].toFixed(5); }).join(',');
-  var q = '[out:json][timeout:40];nwr["amenity"="fuel"](around:' + settings.radius + ',' + pts + ');out center;';
+  var b = L.latLngBounds(r.coords.map(function (c) { return [c[0], c[1]]; }));
+  var pad = settings.radius / 111000 * 1.2;
+  var bbox = [b.getSouth() - pad, b.getWest() - pad * 1.5, b.getNorth() + pad, b.getEast() + pad * 1.5].map(function (v) { return v.toFixed(4); }).join(',');
+  var q = '[out:json][timeout:25];nwr["amenity"="fuel"](' + bbox + ');out center;';
   busy(true); $('btnFuel').disabled = true;
-  overpass(q).then(function (j) {
+  $('fuelOut').innerHTML = '<p class="note" style="margin-top:8px">Recherche des stations…</p>';
+  overpass(q, 30000).then(function (j) {
     var seen = {};
     state.stations = (j.elements || []).map(function (el) {
       var lat = el.lat || (el.center && el.center.lat), lng = el.lon || (el.center && el.center.lon);
       if (lat == null) return null;
       var t = el.tags || {}, loc = C.locateOnRoute(r, [lat, lng]);
+      if (loc.off > settings.radius) return null; // trop loin du tracé
       return {
         lat: lat, lng: lng, at: loc.at, off: loc.off,
         name: t.name || t.brand || 'Station',
@@ -858,7 +864,10 @@ $('btnFuel').onclick = function () {
       if (seen[k]) return false; seen[k] = 1; return true;
     }).sort(function (a, b) { return a.at - b.at; });
     renderFuel(true); refreshGpxLinks();
-  }).catch(function () { toast('Recherche des stations impossible pour le moment'); })
+  }).catch(function (e) {
+    $('fuelOut').innerHTML = '<div class="alert">' + (/Failed|NetworkError|Load failed/i.test(e.message) ? 'Pas de réseau pour chercher les stations.' :
+      'Le serveur OpenStreetMap ne répond pas pour le moment. Réessaie dans une minute.') + '</div>';
+  })
     .then(function () { busy(false); $('btnFuel').disabled = false; });
 };
 function renderFuel(searched) {
@@ -1016,7 +1025,7 @@ var ENERGY = {
 };
 settings.energy = ENERGY[settings.energy] ? settings.energy : 'optimal';
 function E() { return ENERGY[settings.energy]; }
-var APP_VERSION = '17';
+var APP_VERSION = '18';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
@@ -1360,7 +1369,7 @@ $('navStop').onclick = function () {
   stopArmed = false; stopNav();
 };
 $('navVoice').onclick = function () { settings.voice = !settings.voice; save('settings', settings); this.setAttribute('aria-pressed', String(settings.voice)); if (settings.voice) speak('Voix activée'); };
-$('navCenter').onclick = function () { if (!nav) return; nav.follow = true; if (nav.lastP) placeArrow(nav.lastP, true); };
+$('navCenter').onclick = function () { if (!nav) return; nav.follow = true; if (nav.lastP) { setRotation(nav.heading || 0); placeArrow(nav.lastP, true); } };
 map.on('dragstart', function () { if (nav) nav.follow = false; });
 
 function navOnFix(pos) {
@@ -1376,7 +1385,7 @@ function navOnFix(pos) {
     if (moved > 4) nav.heading = (pos.coords.heading != null && !isNaN(pos.coords.heading) && pos.coords.heading >= 0) ? pos.coords.heading : C.bearingTo(nav.lastP, p);
   }
   nav.lastP = p; nav.lastT = now; v = v || 0;
-  if (v > 1.5) setRotation(nav.heading); // cap fiable seulement en mouvement
+  if (v > 1.5 && nav.follow) setRotation(nav.heading); // cap fiable seulement en mouvement ; figé quand tu explores la carte
   // marqueur
   if (!navMarker) {
     var icon = L.divIcon({ className: '', html: '<div class="navme"><svg viewBox="0 0 24 24"><path d="M12 2 4.5 20.3l.7.7L12 18l6.8 3 .7-.7z" fill="#2f7de1" stroke="#fff" stroke-width="1.6"/></svg></div>', iconSize: [34, 34], iconAnchor: [17, 17] });
@@ -1441,6 +1450,23 @@ function setRotation(heading) {
   rot.angle += diff;
   $('map').style.transform = 'rotate(' + rot.angle.toFixed(1) + 'deg)';
 }
+(function () {
+  var wrap = document.querySelector('.mapwrap'), drag = null;
+  wrap.addEventListener('pointerdown', function (e) {
+    if (!nav || !rot.on || e.target.closest('.nav-btn')) return;
+    drag = { x: e.clientX, y: e.clientY, id: e.pointerId };
+  });
+  wrap.addEventListener('pointermove', function (e) {
+    if (!drag || e.pointerId !== drag.id) return;
+    var dx = e.clientX - drag.x, dy = e.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) < 2) return;
+    drag.x = e.clientX; drag.y = e.clientY;
+    var t = rot.angle * Math.PI / 180, cx = dx * Math.cos(t) + dy * Math.sin(t), cy = -dx * Math.sin(t) + dy * Math.cos(t);
+    nav.follow = false;
+    map.panBy([-cx, -cy], { animate: false });
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (ev) { wrap.addEventListener(ev, function () { drag = null; }); });
+})();
 window.addEventListener('resize', function () { if (nav && rot.on) { layoutRot(); if (nav.lastP) placeArrow(nav.lastP, false); } });
 $('navZoomIn').onclick = function () { map.zoomIn(); };
 $('navZoomOut').onclick = function () { map.zoomOut(); };
