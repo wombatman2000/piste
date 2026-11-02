@@ -388,6 +388,9 @@ body.navdark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightnes
     <button class="btn primary" id="btnMakeLoop" type="button">Créer la boucle</button>
     <button class="btn primary" id="btnCancelLoop" type="button" hidden>Annuler le calcul</button>
   </div>
+  <div class="row" id="loopNavRow" hidden>
+    <button class="btn primary" id="btnLoopNav" type="button" style="background:var(--moss);border-color:var(--moss);color:var(--moss-ink)"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 2 4.5 20.3l.7.7L12 18l6.8 3 .7-.7z"/></svg>Lancer le guidage</button>
+  </div>
 </div>
 
 <div class="nav" id="nav" hidden>
@@ -1025,7 +1028,7 @@ var ENERGY = {
 };
 settings.energy = ENERGY[settings.energy] ? settings.energy : 'optimal';
 function E() { return ENERGY[settings.energy]; }
-var APP_VERSION = '18';
+var APP_VERSION = '19';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
@@ -1136,13 +1139,14 @@ function setLoopStart(ll) {
 $('startGps').onclick = function () { settings.loopStart = 'gps'; save('settings', settings); if (watchId === 'refus') watchId = null; startWatch(); updateLoopPos(); };
 $('startMap').onclick = function () { settings.loopStart = 'map'; save('settings', settings); beginPick(); };
 $('btnAutoLoop').onclick = function () {
-  $('loopPanel').hidden = false; $('loopResult').innerHTML = ''; $('btnLoopAgain').hidden = true;
+  $('loopPanel').hidden = false; $('loopResult').innerHTML = ''; $('btnLoopAgain').hidden = true; $('loopNavRow').hidden = true;
   startWatch(); updateLoopPos();
   getProfile().catch(function () {}); // prépare le profil pendant le réglage
 };
 $('btnCloseLoop').onclick = function () { $('loopPanel').hidden = true; stopWatch(); };
 $('btnMakeLoop').onclick = function () { loopSeed = Math.floor(Math.random() * 1e9) + 1; makeLoop(); };
 $('btnLoopAgain').onclick = function () { loopSeed += 7919; makeLoop(); };
+$('btnLoopNav').onclick = function () { $('loopPanel').hidden = true; $('btnNav').click(); };
 $('btnCancelLoop').onclick = function () { loopCancelled = true; cancelFetches(); };
 
 // Accroche les points de la boucle sur de vrais chemins autorisés (Mixte et Engagé)
@@ -1169,7 +1173,7 @@ function makeLoop() {
   btns.forEach(function (b) { b.disabled = true; });
   var t0 = Date.now(), phase = 'Préparation';
   function progress(txt) { if (txt) phase = txt; $('loopResult').innerHTML = '<p class="note" style="margin-top:12px">' + phase + ' · ' + Math.round((Date.now() - t0) / 1000) + ' s</p>'; }
-  progress(); var tick = setInterval(progress, 1000);
+  progress(); var tick = setInterval(progress, 1000); $('loopNavRow').hidden = true;
   loopCancelled = false; $('btnCancelLoop').hidden = false; $('btnMakeLoop').hidden = true;
   var target = settings.loopKm * 1000, dir = settings.loopDir, seed = loopSeed;
   var rnd = (function (x) { return function () { x = (x * 16807) % 2147483647; return x / 2147483647; }; })(seed % 2147483646 + 1);
@@ -1234,7 +1238,7 @@ function makeLoop() {
       (share == null ? '' : ', ' + Math.round(share * 100) + ' % de chemins') + '.' +
       (Math.abs(best.route.length - target) / target > 0.15 ? ' Le réseau de chemins ne permet pas d\'approcher davantage les ' + settings.loopKm + ' km ici.' : '') +
       (fromGps ? ' Départ depuis ta position (± ' + fmtAcc(lastFix.acc) + ').' : ' Départ depuis le drapeau.') + ' Tu peux déplacer les points sur la carte.</div>';
-    $('btnLoopAgain').hidden = false;
+    $('btnLoopAgain').hidden = false; $('loopNavRow').hidden = false;
     if ($('loopPanel').hidden) stopWatch();
   }).catch(function (e) {
     if (e.message === 'CANCELLED') { $('loopResult').innerHTML = '<p class="note" style="margin-top:12px">Calcul annulé.</p>'; return; }
