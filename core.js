@@ -345,6 +345,35 @@
   }
 
 
+  /* ---------- Allers-retours en cul-de-sac ---------- */
+  // Repère les points de passage où le parcours entre dans une impasse et ressort par le même chemin.
+  // Renvoie, pour chacun, le point de la bifurcation (là où l'aller-retour commence).
+  function findSpurs(r, wps, minLen) {
+    minLen = minLen || 60;
+    var c = r.coords, cum = r.cum, out = [], from = 0;
+    for (var j = 1; j < wps.length - 1; j++) {
+      // point du parcours le plus proche du point de passage, en avançant dans l'ordre
+      var best = -1, bd = Infinity;
+      for (var i = from; i < c.length; i++) {
+        var d = haversine(c[i], wps[j]);
+        if (d < bd) { bd = d; best = i; }
+      }
+      if (best < 0) continue;
+      from = best;
+      var k = 0;
+      while (best - k - 1 >= 0 && best + k + 1 < c.length && haversine(c[best - k - 1], c[best + k + 1]) < 25) k++;
+      // tolère un décalage d'un point entre l'aller et le retour
+      if (!k) {
+        var k2 = 0;
+        while (best - k2 - 1 >= 0 && best + k2 + 2 < c.length && haversine(c[best - k2 - 1], c[best + k2 + 2]) < 25) k2++;
+        k = k2;
+      }
+      var len = k ? cum[Math.min(c.length - 1, best + k)] - cum[best] : 0;
+      if (len >= minLen) out.push({ j: j, root: [c[best - k][0], c[best - k][1]], len: len });
+    }
+    return out;
+  }
+
   /* ---------- Navigation ---------- */
 
   function bearingTo(a, b) {
@@ -469,7 +498,7 @@
   }
 
   var api = {
-    mergeBrouter: mergeBrouter, bearingTo: bearingTo, angleDiff: angleDiff, pointAt: pointAt, project: project, track: track,
+    findSpurs: findSpurs, mergeBrouter: mergeBrouter, bearingTo: bearingTo, angleDiff: angleDiff, pointAt: pointAt, project: project, track: track,
     buildInstructions: buildInstructions, geomTurns: geomTurns, instrText: instrText, sayDist: sayDist, corridorTiles: corridorTiles, snapToTracks: snapToTracks, destination: destination, loopRadius: loopRadius, loopWaypoints: loopWaypoints, BEARINGS: BEARINGS,
     haversine: haversine, cumulative: cumulative, parseTags: parseTags, surfaceClass: surfaceClass,
     parseBrouter: parseBrouter, fromCoords: fromCoords, computeAscend: computeAscend,

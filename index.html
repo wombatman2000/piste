@@ -221,6 +221,8 @@ body.rotmode .mapwrap, body.rotmode #map { touch-action: none; }
 .nav-zoom { position: fixed; right: max(12px, env(safe-area-inset-right, 0px)); top: 50%; transform: translateY(-50%); display: grid; gap: 8px; }
 .nav-attr { position: absolute; left: max(10px, env(safe-area-inset-left, 0px)); bottom: calc(100% + 4px); font-size: 10px; color: #333; background: rgba(255,255,255,.75); padding: 1px 5px; border-radius: 4px; }
 .nav-bottom { position: relative; }
+body.navmode .leaflet-tile-container img.leaflet-tile { width: 256.6px !important; height: 256.6px !important; }
+body.navdark #map { background: #1d2120; }
 body.navdark .leaflet-tile-pane { filter: invert(1) hue-rotate(180deg) brightness(.85) contrast(.9); }
 .me { width: 16px; height: 16px; border-radius: 50%; background: #2f7de1; border: 3px solid #fff; box-shadow: 0 0 0 6px rgba(47,125,225,.25); }
 .leaflet-popup-content { font: 14px/1.4 var(--body); }
@@ -690,6 +692,20 @@ function routeFor(wps) {
     throw err;
   }).then(function (json) { return C.parseBrouter(json); });
 }
+// Calcule le parcours puis supprime les allers-retours en impasse en déplaçant le point à la bifurcation
+function routeClean(wps) {
+  var moved = 0;
+  function attempt(w, n) {
+    return routeFor(w).then(function (r) {
+      var spurs = C.findSpurs(r, w);
+      if (!spurs.length || n >= 2) return { wps: w, r: r, moved: moved };
+      var nw = w.slice();
+      spurs.forEach(function (sp) { nw[sp.j] = sp.root; moved++; });
+      return attempt(nw, n + 1);
+    });
+  }
+  return attempt(wps, 0);
+}
 function routeError(err) {
   var m = String((err && err.message) || err);
   if (/not mapped|position not/i.test(m)) return 'Un point est trop loin d\'une voie accessible : déplace-le près d\'un chemin ou d\'une route';
@@ -707,9 +723,13 @@ function doRoute() {
   if (state.imported) return;
   if (state.wps.length < 2) { state.route = null; routeLayer.clearLayers(); renderStats(); return; }
   var seq = ++reqSeq; busy(true);
-  routeFor(state.wps).then(function (r) {
+  routeClean(state.wps).then(function (res) {
     if (seq !== reqSeq) return;
-    state.route = r; drawRoute(); renderStats();
+    if (res.moved) {
+      state.wps = res.wps; save('draft', state.wps); renderWps();
+      toast(res.moved > 1 ? res.moved + ' points déplacés pour éviter des allers-retours en impasse' : 'Point déplacé pour éviter un aller-retour en impasse', 4000);
+    }
+    state.route = res.r; drawRoute(); renderStats();
   }).catch(function (err) {
     if (seq !== reqSeq || err.message === 'CANCELLED') return;
     toast(routeError(err), 5000);
@@ -1028,7 +1048,7 @@ var ENERGY = {
 };
 settings.energy = ENERGY[settings.energy] ? settings.energy : 'optimal';
 function E() { return ENERGY[settings.energy]; }
-var APP_VERSION = '20';
+var APP_VERSION = '21';
 function showMe(ll, acc) {
   if (!meCircle) meCircle = L.circle(ll, { radius: acc || 0, color: '#2f7de1', weight: 1, fillOpacity: .08, interactive: false }).addTo(map);
   else meCircle.setLatLng(ll).setRadius(acc || 0);
@@ -1196,7 +1216,7 @@ function makeLoop() {
       return snapLoop(raw, radius).then(function (wps) {
         if (loopCancelled) throw new Error('CANCELLED');
         progress('Calcul du parcours' + (attempt ? ' (ajustement ' + attempt + ')' : ''));
-        return routeFor(wps).then(function (r) { return { wps: wps, r: r }; });
+        return routeClean(wps);
       }).then(function (res) {
         var wps = res.wps, r = res.r;
         var err = Math.abs(r.length - target) / target;
